@@ -11,13 +11,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +32,8 @@ import com.meow.ledger.shared.auto.DEFAULT_WEBVIEW_URL
 import com.meow.ledger.shared.auto.THEME_SYSTEM
 import com.meow.ledger.shared.auto.isAllowedWebViewUrl
 import com.meow.ledger.ui.theme.LocalPalette
+import com.meow.ledger.ui.theme.glassCard
+import com.meow.ledger.ui.theme.MeowTheme
 import com.meow.ledger.ui.theme.paletteOf
 
 /** 平台侧能力接口。Android 入口注入真实实现，预览可提供只读假实现。 */
@@ -118,7 +118,7 @@ fun EntryNavHost(
         }.getOrDefault("系统功能暂不可用，已回到底部导航，可在对应页面手动操作。")
     }
 
-    CompositionLocalProvider(LocalPalette provides palette) {
+    MeowTheme(theme) {
         Box(
             Modifier
                 .fillMaxSize()
@@ -156,8 +156,7 @@ private fun StatusBanner(message: String, modifier: Modifier = Modifier, onDismi
         modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 10.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(palette.cardBg)
+            .glassCard(elevation = 2.dp)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -194,12 +193,10 @@ private fun PermissionGate(
             fontSize = 13.sp,
         )
         items.forEach { item ->
-            val shape = RoundedCornerShape(16.dp)
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clip(shape)
-                    .background(palette.cardBg)
+                    .glassCard(elevation = 2.dp)
                     .padding(14.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
