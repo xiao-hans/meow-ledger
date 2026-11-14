@@ -9,16 +9,22 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * SQLDelight 迁移回归：所有历史安装（v1 / v2 / 由 v1 升上来但没跑过迁移的 v2）
- * 都必须能升到当前 v3，且升级后的表结构与全新安装一致、核心账单数据不丢。
+ * SQLDelight 迁移回归：所有历史安装（v1 / v2 / 由 v1 升上来但没跑过迁移的 v2 /
+ * 版本戳 3 但结构漂移的 v3）都必须能升到当前 v4，且升级后的表结构与全新安装一致、
+ * 核心账单数据不丢。
  *
  * 版本口径（来自 git 历史，口径见各 fixture 头注释）：
  *  - v1 = 76f82b2^ 的 .sq（28 表，sync_queue 4 列，无 version 声明）
  *  - v2 = 76f82b2 的 .sq（DDL 与 v1 相同，version = 2）
- *  - v3 = 当前 .sq（36 表，sync_queue 11 列，version = 3）
+ *  - v3 = eb9de0b^ 的 .sq（sync_queue 11 列，version = 3）
+ *  - v3 漂移库 = 11-11 当天早期构建建的真机库：user_version 已是 3，但结构比 v1
+ *    fixture 还老（缺 10 张表、fixed_bill/bill_remind/sync_queue 为旧形）。根因是
+ *    新旧构建都声明 version = 3，迁移从未触发，见 migrations/3.sqm 头注释。
+ *  - v4 = 当前 .sq（37 表，version = 4）
  *
- * SQLDelight 的 N.sqm = 「从版本 N 升到 N+1」，因此 1.sqm 在 1→2 / 1→3 跑，
- * 2.sqm 在 2→3 / 1→3 跑。migrate(x, 3) 会把这一路上所有适用的脚本按序执行。
+ * SQLDelight 的 N.sqm = 「从版本 N 升到 N+1」，因此 1.sqm 在 1→2 / 1→4 跑，
+ * 2.sqm 在 2→3 / 1→4 跑，3.sqm 在 3→4 / 1→4 / 2→4 跑。
+ * migrate(x, 4) 会把这一路上所有适用的脚本按序执行。
  */
 class MigrationTest {
 
@@ -138,21 +144,21 @@ class MigrationTest {
 
     // ---------------------------------------------------------------- tests
 
-    /** 全新安装的 v3 schema，作为所有升级路径的对照基准。 */
-    private fun freshV3(): JdbcSqliteDriver {
+    /** 全新安装的当前 schema，作为所有升级路径的对照基准。 */
+    private fun freshSchema(): JdbcSqliteDriver {
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         MeowDatabase.Schema.create(driver)
         return driver
     }
 
-    private fun assertUpgradesToV3(fixture: String, oldVersion: Int, label: String) {
+    private fun assertUpgradesToV4(fixture: String, oldVersion: Int, label: String) {
         val driver = oldDatabase(fixture)
 
         // (a) 跑迁移；SQLDelight 用显式 oldVersion 参数决定执行哪些 .sqm。
-        MeowDatabase.Schema.migrate(driver, oldVersion.toLong(), 3)
+        MeowDatabase.Schema.migrate(driver, oldVersion.toLong(), 4)
 
         // (b) 升级后的表集合、每张表的列名/类型/默认值/主键，与全新安装一致。
-        val expected = schemaSnapshot(freshV3())
+        val expected = schemaSnapshot(freshSchema())
         val actual = schemaSnapshot(driver)
         assertEquals(
             expected.keys.sorted(),
@@ -167,9 +173,9 @@ class MigrationTest {
                 "$label：表 $table 的列定义应与全新安装一致",
             )
         }
-        // 索引集合也必须一致（sync_queue_status 是 v3 新增的）。
+        // (b) 索引集合也必须一致（sync_queue_status 是 v3 新增的）。
         assertEquals(
-            objectNames(freshV3(), "index").sorted(),
+            objectNames(freshSchema(), "index").sorted(),
             objectNames(driver, "index").sorted(),
             "$label：升级后的索引集合应与全新安装一致",
         )
@@ -216,23 +222,69 @@ class MigrationTest {
 
     @Test
     fun v1UpgradesToV3WithoutCrashAndPreservesData() =
-        assertUpgradesToV3("v1.sql", 1, "v1→v3")
+        assertUpgradesToV4("v1.sql", 1, "v1→v4")
 
     @Test
     fun v2UpgradesToV3WithoutCrashAndPreservesData() =
-        assertUpgradesToV3("v2.sql", 2, "v2→v3")
+        assertUpgradesToV4("v2.sql", 2, "v2→v4")
 
     @Test
     fun v2UpgradedFromV1WithoutMigrationStillUpgradesToV3() =
-        assertUpgradesToV3("v2_from_v1_no_migration.sql", 2, "v2(由 v1 升级且未跑 1→2)→v3")
+        assertUpgradesToV4("v2_from_v1_no_migration.sql", 2, "v2(由 v1 升级且未跑 1→2)→v4")
+
+    @Test
+    fun v3DriftedUpgradesToV4WithoutCrashAndRepairsStructure() {
+        val driver = oldDatabase("v3_drifted.sql")
+
+        // 漂移库自带一行旧形 fixed_bill 与一行旧形 bill_remind，验证重建后数据存活。
+        driver.execute(
+            null,
+            "INSERT INTO fixed_bill(id, member_cate_id, money, type, fixed_day, desc) " +
+                "VALUES ('fb1', 3, 2500, 1, 5, '漂移库周期账')",
+            0,
+        )
+        driver.execute(
+            null,
+            "INSERT INTO bill_remind(id, title, time, repeat_type) " +
+                "VALUES ('br1', '漂移库提醒', '2026-11-10 09:00:00', 1)",
+            0,
+        )
+
+        MeowDatabase.Schema.migrate(driver, 3, 4)
+
+        // (a) 结构与全新安装完全一致（含漂移库缺的 10 张表与 3 张旧形表）。
+        val expected = schemaSnapshot(freshSchema())
+        val actual = schemaSnapshot(driver)
+        assertEquals(expected.keys.sorted(), actual.keys.sorted(), "v3漂移→v4：表集合应一致")
+        expected.forEach { (table, expectedCols) ->
+            assertEquals(expectedCols, actual[table] ?: error("v3漂移→v4：缺少表 $table"))
+        }
+        assertEquals(
+            objectNames(freshSchema(), "index").sorted(),
+            objectNames(driver, "index").sorted(),
+            "v3漂移→v4：索引集合应一致",
+        )
+
+        // (b) 重建后的旧形数据按共有列存活，新列走 DEFAULT。
+        val db = MeowDatabase(driver)
+        val fb = db.fixedQueries.selectAll().executeAsList().single()
+        assertEquals("fb1", fb.id)
+        assertEquals(2500L, fb.money)
+        assertEquals(0L, fb.not_in_budget)
+        val br = db.fixedQueries.selectReminds().executeAsList().single()
+        assertEquals("br1", br.id)
+        assertEquals(9L, br.hour)
+        // (c) 漂移库 4 列 sync_queue → 11 列，生成查询可跑。
+        assertEquals(0L, db.s2Queries.countPending().executeAsOne())
+    }
 
     @Test
     fun migratedSyncQueueColumnsHaveExpectedTypesAndDefaults() {
         val driver = oldDatabase("v1.sql")
-        MeowDatabase.Schema.migrate(driver, 1, 3)
+        MeowDatabase.Schema.migrate(driver, 1, 4)
         val cols = columns(driver, "sync_queue")
 
-        // 7 个 ALTER 追加的列，类型/默认值逐字对齐 S2.sq。
+        // 7 个补齐的列，类型/默认值逐字对齐 S2.sq。
         assertEquals(Column("TEXT", 1, "'POST'", 0), cols["method"])
         assertEquals(Column("TEXT", 1, "''", 0), cols["client_id"])
         assertEquals(Column("INTEGER", 1, "0", 0), cols["status"])
@@ -240,7 +292,7 @@ class MigrationTest {
         assertEquals(Column("INTEGER", 1, "0", 0), cols["next_attempt"])
         assertEquals(Column("INTEGER", 1, "0", 0), cols["update_time"])
         assertEquals(Column("TEXT", 1, "''", 0), cols["error"])
-        // 原有 4 列仍在，共 11 列；队列里待重放的行没被 DROP 掉。
+        // 原有 4 列仍在，共 11 列；队列里待重放的行没被丢掉。
         assertEquals(11, cols.size)
         assertEquals(
             setOf("id", "path", "payload", "create_time"),
@@ -256,9 +308,9 @@ class MigrationTest {
             "INSERT INTO sync_queue(id, path, payload, create_time) VALUES ('q1', 'Bills/Create', '{}', 100)",
             0,
         )
-        MeowDatabase.Schema.migrate(driver, 1, 3)
+        MeowDatabase.Schema.migrate(driver, 1, 4)
 
-        // 用生成查询读回：能按列名取到，且新列走 DEFAULT，说明没有 DROP 重建。
+        // 用生成查询读回：能按列名取到，且新列走 DEFAULT，说明行按共有列保留了。
         val row = MeowDatabase(driver).s2Queries
             .selectPendingSync(Long.MAX_VALUE, 100L).executeAsList().single()
         assertEquals("q1", row.id)

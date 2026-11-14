@@ -61,7 +61,9 @@ sqldelight {
             packageName.set("com.meow.ledger.shared.db")
             // 1 版是已发布的库。后来加的表必须走 migrations/ 的迁移，
             // 否则老安装查询不存在的表会直接崩溃。
-            version = 3
+            // 4：修复「版本戳已是 3、结构却漂移」的历史库（见 migrations/3.sqm 头注释）。
+            // 此后每次改 .sq 必须同步加 N.sqm 并把 version +1，否则老安装结构漂移、启动即崩。
+            version = 4
         }
     }
 }

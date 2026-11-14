@@ -1,0 +1,246 @@
+-- 3 → 4：修复「版本戳已是 3、结构却残缺」的历史库。
+--
+-- 背景（2026-11-14 真机 vivo V2419A 实测，库文件 databases/meow_ledger.db）：
+-- 11-11 当天首次安装的构建用早期 .sq 建库，而 build.gradle.kts 当时已声明
+-- version = 3；此后 .sq 不断演进，但版本号从未再变，SQLDelight 看到版本相同
+-- 就不跑任何迁移，库结构随之漂移。实测漂移态：
+--   * 缺 10 张表：bill_tag / bill_remark / cate_extend / member_assets /
+--     image_info / widget_base / widget_desktop / widget_hot（2.sqm 从未在其
+--     上跑过）+ group_vip / installment_item（加进 .sq 后从未进过任何迁移）；
+--   * fixed_bill 缺 not_in_budget（14 列旧形）；
+--   * bill_remind 缺 day / hour / fixed_bill_id（7 列旧形）；
+--   * sync_queue 仍是 4 列旧形。
+-- 启动即崩（SQLiteException: no such column: fixed_bill.not_in_budget）。
+--
+-- 约束（沿用 2.sqm 的口径）：
+--  * 所有 CREATE 带 IF NOT EXISTS：漂移库补建缺失表，完整库为空操作。
+--  * sync_queue / bill_remind / fixed_bill 在新旧安装间列集不同，且 SQLite
+--    没有条件加列（CASE 救不了 prepare 阶段的缺列错误），无法用 ALTER 幂等
+--    表达 → 采用「建新表 → 按新旧共有列 INSERT SELECT → DROP 旧表 → RENAME」，
+--    语句在两种列集上都能编译，行数据按共有列保留（真机三表均 0 行；v1/v2
+--    fixture 口径里 fixed_bill/bill_remind 本就是新形，其新列值会被重置为
+--    DEFAULT——现实中不存在这样的安装，全新安装创建时即带完整列）。
+--  * 1→4 路径上 2.sqm 先把 sync_queue ALTER 到 11 列，本文件再重建一次：
+--    2.sqm 补的列在存量行上恒为 DEFAULT，重建无实际损失。
+
+-- 重放 1.sqm 的账号/小组件表。
+CREATE TABLE IF NOT EXISTS member_profile (
+  id INTEGER NOT NULL PRIMARY KEY,
+  nickname TEXT NOT NULL DEFAULT '',
+  phone TEXT NOT NULL DEFAULT '',
+  login_type TEXT NOT NULL DEFAULT '',
+  bind_type TEXT NOT NULL DEFAULT '',
+  bind_id TEXT NOT NULL DEFAULT '',
+  vip INTEGER NOT NULL DEFAULT 0,
+  vip_expire INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS sms_code (
+  phone TEXT NOT NULL PRIMARY KEY,
+  code TEXT NOT NULL DEFAULT '',
+  expires INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS member_import_bill_file (
+  id TEXT NOT NULL PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT '',
+  type TEXT NOT NULL DEFAULT '',
+  count INTEGER NOT NULL DEFAULT 0,
+  status INTEGER NOT NULL DEFAULT 0,
+  create_time INTEGER NOT NULL DEFAULT 0,
+  content TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS member_order (
+  id TEXT NOT NULL PRIMARY KEY,
+  money INTEGER NOT NULL DEFAULT 0,
+  method TEXT NOT NULL DEFAULT '',
+  type INTEGER NOT NULL DEFAULT 0,
+  product_id TEXT NOT NULL DEFAULT '',
+  product_name TEXT NOT NULL DEFAULT '',
+  status INTEGER NOT NULL DEFAULT 0,
+  create_time INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS contract_info (
+  id INTEGER NOT NULL PRIMARY KEY,
+  signed INTEGER NOT NULL DEFAULT 0,
+  provider TEXT NOT NULL DEFAULT '',
+  product_name TEXT NOT NULL DEFAULT '',
+  money INTEGER NOT NULL DEFAULT 0,
+  next_date TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS behavior_event (
+  id TEXT NOT NULL PRIMARY KEY,
+  kind TEXT NOT NULL DEFAULT '',
+  content TEXT NOT NULL DEFAULT '',
+  contact TEXT NOT NULL DEFAULT '',
+  create_time INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS widget_user (
+  id TEXT NOT NULL PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT '',
+  size TEXT NOT NULL DEFAULT 'small',
+  kind TEXT NOT NULL DEFAULT 'month',
+  create_time INTEGER NOT NULL DEFAULT 0
+);
+
+-- 重放 2.sqm 的 v3 表。
+CREATE TABLE IF NOT EXISTS bill_tag (
+  client_id TEXT NOT NULL,
+  member_id INTEGER NOT NULL DEFAULT 0,
+  tag_id INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (client_id, member_id, tag_id)
+);
+
+CREATE TABLE IF NOT EXISTS bill_remark (
+  client_id TEXT NOT NULL,
+  member_id INTEGER NOT NULL DEFAULT 0,
+  content TEXT NOT NULL DEFAULT '',
+  images TEXT NOT NULL DEFAULT '',
+  create_date INTEGER NOT NULL DEFAULT 0,
+  update_date INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (client_id, member_id)
+);
+
+CREATE TABLE IF NOT EXISTS cate_extend (
+  member_cate_id INTEGER NOT NULL,
+  book_id INTEGER NOT NULL DEFAULT 0,
+  member_id INTEGER NOT NULL DEFAULT 0,
+  type INTEGER NOT NULL DEFAULT 1,
+  sort INTEGER NOT NULL DEFAULT 0,
+  hidden INTEGER NOT NULL DEFAULT 0,
+  status INTEGER NOT NULL DEFAULT 0,
+  create_date INTEGER NOT NULL DEFAULT 0,
+  update_date INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (member_cate_id, book_id, member_id)
+);
+
+CREATE TABLE IF NOT EXISTS member_assets (
+  member_id INTEGER NOT NULL,
+  book_id INTEGER NOT NULL DEFAULT 0,
+  appear INTEGER NOT NULL DEFAULT 0,
+  income INTEGER NOT NULL DEFAULT 0,
+  is_master INTEGER NOT NULL DEFAULT 0,
+  join_date INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (member_id, book_id)
+);
+
+CREATE TABLE IF NOT EXISTS image_info (
+  id TEXT NOT NULL PRIMARY KEY,
+  client_id TEXT NOT NULL DEFAULT '',
+  path TEXT NOT NULL DEFAULT '',
+  url TEXT NOT NULL DEFAULT '',
+  source INTEGER NOT NULL DEFAULT 0,
+  create_date INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS widget_base (
+  id TEXT NOT NULL PRIMARY KEY,
+  kind TEXT NOT NULL DEFAULT '',
+  background TEXT NOT NULL DEFAULT '',
+  transparency INTEGER NOT NULL DEFAULT 100,
+  text_color TEXT NOT NULL DEFAULT '#0C0C09',
+  show_bills INTEGER NOT NULL DEFAULT 1,
+  update_time INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS widget_desktop (
+  id TEXT NOT NULL PRIMARY KEY,
+  widget_id TEXT NOT NULL DEFAULT '',
+  size TEXT NOT NULL DEFAULT 'small',
+  position INTEGER NOT NULL DEFAULT 0,
+  config TEXT NOT NULL DEFAULT '',
+  update_time INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS widget_hot (
+  id TEXT NOT NULL PRIMARY KEY,
+  title TEXT NOT NULL DEFAULT '',
+  path TEXT NOT NULL DEFAULT '',
+  count INTEGER NOT NULL DEFAULT 0,
+  update_time INTEGER NOT NULL DEFAULT 0
+);
+
+-- .sq 新增但从未进过任何迁移的两张表，漂移库缺它们。
+CREATE TABLE IF NOT EXISTS group_vip (
+  id TEXT NOT NULL PRIMARY KEY,
+  show_id TEXT NOT NULL DEFAULT '',
+  status INTEGER NOT NULL DEFAULT 0,
+  create_time INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS installment_item (
+  id TEXT NOT NULL PRIMARY KEY,
+  plan_id TEXT NOT NULL DEFAULT '',
+  num INTEGER NOT NULL DEFAULT 0,
+  money INTEGER NOT NULL DEFAULT 0,
+  interest INTEGER NOT NULL DEFAULT 0,
+  status INTEGER NOT NULL DEFAULT 0,
+  execute_date INTEGER NOT NULL DEFAULT 0
+);
+
+-- sync_queue：4 列旧形（漂移库）→ 11 列。定义逐字对齐 S2.sq。
+CREATE TABLE sync_queue_new (
+  id TEXT NOT NULL PRIMARY KEY,
+  path TEXT NOT NULL DEFAULT '',
+  method TEXT NOT NULL DEFAULT 'POST',
+  payload TEXT NOT NULL DEFAULT '',
+  client_id TEXT NOT NULL DEFAULT '',
+  status INTEGER NOT NULL DEFAULT 0,
+  retry_count INTEGER NOT NULL DEFAULT 0,
+  next_attempt INTEGER NOT NULL DEFAULT 0,
+  create_time INTEGER NOT NULL DEFAULT 0,
+  update_time INTEGER NOT NULL DEFAULT 0,
+  error TEXT NOT NULL DEFAULT ''
+);
+INSERT INTO sync_queue_new (id, path, payload, create_time)
+  SELECT id, path, payload, create_time FROM sync_queue;
+DROP TABLE sync_queue;
+ALTER TABLE sync_queue_new RENAME TO sync_queue;
+
+-- bill_remind：7 列旧形（无 day/hour/fixed_bill_id）→ 10 列。定义逐字对齐 Fixed.sq。
+CREATE TABLE bill_remind_new (
+  id TEXT NOT NULL PRIMARY KEY,
+  title TEXT NOT NULL DEFAULT '',
+  time TEXT NOT NULL DEFAULT '',
+  day INTEGER NOT NULL DEFAULT 1,
+  hour INTEGER NOT NULL DEFAULT 9,
+  fixed_bill_id TEXT NOT NULL DEFAULT '',
+  repeat_type INTEGER NOT NULL DEFAULT 0,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  create_time INTEGER NOT NULL DEFAULT 0,
+  update_time INTEGER NOT NULL DEFAULT 0
+);
+INSERT INTO bill_remind_new (id, title, time, repeat_type, enabled, create_time, update_time)
+  SELECT id, title, time, repeat_type, enabled, create_time, update_time FROM bill_remind;
+DROP TABLE bill_remind;
+ALTER TABLE bill_remind_new RENAME TO bill_remind;
+
+-- fixed_bill：14 列旧形（无 not_in_budget）→ 15 列。定义逐字对齐 Fixed.sq。
+CREATE TABLE fixed_bill_new (
+  id TEXT NOT NULL PRIMARY KEY,
+  member_cate_id INTEGER NOT NULL DEFAULT 0,
+  money INTEGER NOT NULL DEFAULT 0,
+  type INTEGER NOT NULL DEFAULT 1,
+  fixed_type INTEGER NOT NULL DEFAULT 0,
+  fixed_day INTEGER NOT NULL DEFAULT 1,
+  book_id INTEGER NOT NULL DEFAULT 0,
+  assets_id INTEGER NOT NULL DEFAULT 0,
+  desc TEXT NOT NULL DEFAULT '',
+  tag_ids TEXT NOT NULL DEFAULT '',
+  status INTEGER NOT NULL DEFAULT 0,
+  not_in_budget INTEGER NOT NULL DEFAULT 0,
+  next_execute_date INTEGER NOT NULL DEFAULT 0,
+  create_time INTEGER NOT NULL DEFAULT 0,
+  update_time INTEGER NOT NULL DEFAULT 0
+);
+INSERT INTO fixed_bill_new (id, member_cate_id, money, type, fixed_type, fixed_day, book_id, assets_id, desc, tag_ids, status, next_execute_date, create_time, update_time)
+  SELECT id, member_cate_id, money, type, fixed_type, fixed_day, book_id, assets_id, desc, tag_ids, status, next_execute_date, create_time, update_time FROM fixed_bill;
+DROP TABLE fixed_bill;
+ALTER TABLE fixed_bill_new RENAME TO fixed_bill;
+
+-- 索引在表重建之后补回。
+CREATE INDEX IF NOT EXISTS sync_queue_status ON sync_queue(status, next_attempt);
