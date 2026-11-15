@@ -161,15 +161,15 @@ ad_free: 不接入广告 SDK，不调用广告请求端点
 
 ## S11 · 首次权限清单与按功能引导
 
-状态：代码、JVM 测试与构建完成；vivo 真机因无线调试离线未验（见下方提交记录）。
+状态：S11 首次清单完成后，按用户要求改为两类申请，代码、JVM 测试、构建与 vivo 真机两条路径均已完成。
 
-1. 权限清单按「功能 → 可选权限」展示；每项可在清单里单独申请，也可跳过。
-2. 首次冷启动只自动弹一次：看到清单即写 `permission_intro_shown`；清空本地数据后不重弹。
-3. 用户进入自动记账、通知/无障碍采集、截屏 OCR、周期提醒、后台保活、应用锁等功能时，才按 `permissionKeysForFeature` 检查缺项并弹上下文引导；「以后再说」只跳过本次会话，可稍后从「我的 → 权限与隐私」再次打开。
-4. 基础权限申请可跳过，权限项不阻塞手工记账；所有系统设置项仍走 S10 的品牌兼容与逐层兜底。
-5. 验证：`:shared:jvmTest` 中 `permissionIntroIsStoredAndFeaturePermissionsAreMapped` 覆盖持久化与 7 组功能映射；`:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL；`git diff --check` 通过。
+1. 权限清单分「基础权限 · 进入前申请」与「自动记账等可选权限」两组，每组按「功能 → 权限」展示。
+2. 首次冷启动展示清单但不写完成标记；基础权限（通知/相册/相机）的系统申请回调结束后写 `permission_intro_shown` 并进入账本，拒绝也放行。
+3. 第二个按钮由「继续使用本地记账」改为「申请完全权限」：先处理基础权限，再打开第一项可选权限系统设置；返回后即进入账本，不串联多个厂商设置页。可选权限每项都能拒绝，不提供跳过按钮。
+4. 用户进入自动记账、通知/无障碍采集、截屏 OCR、周期提醒、后台保活、应用锁等功能时，按 `permissionKeysForFeature` 检查缺项并弹上下文引导；「以后再说」只跳过本次会话，可稍后从「我的 → 权限与隐私」再次打开。
+5. 验证：`:shared:jvmTest` 覆盖持久化、7 组功能映射与基础权限「拒绝/不支持也算处理完」；`:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL；vivo V2419A 冷启动分别复验「申请基础权限并进入」与「申请完全权限（基础权限全拒绝）」两条路径，均回到主账单页且写 `permission_intro_shown|1`；`git diff --check` 通过。
 
-完成依据：首次清单不复弹、清单内可逐项申请、后续按功能再引导、可从设置主动打开；各品牌真机授权链路仍待设备。
+完成依据：两类申请都进入账本、清单内可逐项申请、后续按功能再引导、可从设置主动打开；各品牌真机授权链路仍待其它设备。
 
 ## 每个切片的提交记录
 
@@ -186,6 +186,7 @@ ad_free: 不接入广告 SDK，不调用广告请求端点
 | S8 | `2a8c806` | 118 tests 0 fail；埋点三类落库 E2E（ac_add_bill×2 入库实证） | 模拟器记账保存+埋点；imePadding 键盘遮挡修复后回归截图 | 完成 |
 | S9（免费解锁与数据迁移） | 本提交 | `:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL；`git diff --check` 通过；BackupTest/SampleCsvTest 覆盖全库备份与样本 CSV | vivo V2419A 真机：Mine 显示「全部功能已解锁」，备份页导出 JSON 成功（含 4 笔账与分类）、无红色失败提示 | 完成（恢复/文件选择待人工） |
 | S10（权限申请与跨品牌适配） | 本提交 | `:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL；`git diff --check` 通过 | vivo V2419A 真机：冷启动权限门文案/去设置按钮/不支持原因/已开启状态截图，启动无 FATAL | 完成（其它品牌真机待验） |
-| S11（首次清单与按功能引导） | `b3678b8` | `:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL；`git diff --check` 通过；新增持久化与功能映射 JVM 测试 | 未验：无线调试离线，`adb mdns services` 为空；待机主重新开启无线调试后补冷启动、二次启动、主动打开与功能引导截图 | 完成（真机待验） |
+| S11（首次清单与按功能引导） | `b3678b8` | `:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL；`git diff --check` 通过；新增持久化与功能映射 JVM 测试 | 当时未验：无线调试离线，`adb mdns services` 为空 | 完成（真机待验） |
+| S12（首次引导两类申请） | 本提交 | `:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL； `git diff --check` 通过；基础权限完成判定 JVM 测试 | vivo V2419A：基础权限全允许自动进首页；完全权限路径基础权限全拒绝后打开一个可选系统页，按一次返回进首页；两路径均写 `permission_intro_shown|1` | 完成（其它品牌待验） |
 
 > **实测基线（2026-11-12 状态对账时补记）**：`origin/master` 上的 `:shared:jvmTest` = **139 tests / 0 failures**，`:app:assembleDebug` = **BUILD SUCCESSFUL**；环境 JDK 17.0.21 + Gradle 8.11.1（wrapper jar 方式，无 `gradlew` 脚本）。上表各切片的「96 / 100 / 113 / 116 / 118 tests」是当时提交记录里的历史数字，与最新基线口径不同，不要累加或当成当前值；本次对账未逐个重跑历史提交。三个先于状态对账 PR 合并的分支各自报告的测试数：PR #3 `fix/network-contract` 174 用例、PR #2 `fix/db-migration-v3` 145 用例、PR `fix/interaction-discipline` 新增 `AutoBatchConfirmTest` / `ClearLocalDataTest`（各分支独立口径，合并后以 CI 实测为准）。

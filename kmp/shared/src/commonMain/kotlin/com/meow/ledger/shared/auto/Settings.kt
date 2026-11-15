@@ -39,8 +39,28 @@ const val KEY_SYNC_CONFIG_BASE_URL = "sync_config_base_url"
 /** 真实服务端签发的登录令牌；空表示未登录，不发 `Authorization`。 */
 const val KEY_AUTH_TOKEN = "auth_token"
 
-/** 首次权限引导是否已展示。之后只在用户进入对应功能或主动打开清单时再提醒。 */
+/** 首次权限引导是否已完成基础权限申请。未完成前不进入 App。 */
 const val KEY_PERMISSION_INTRO_SHOWN = "permission_intro_shown"
+
+/**
+ * 基础权限：首次启动必须逐项处理系统申请，处理完即进入账本。
+ * 拒绝、本机不支持或系统已授予都算处理完，避免把用户永久挡在首页外。
+ */
+val BASE_PERMISSION_KEYS: Set<String> = setOf("notification", "media_images", "camera")
+
+/** 基础权限是否都已处理；拒绝也算处理完，避免用户被永久挡住。 */
+fun basePermissionsSatisfied(items: List<PermissionCheckState>): Boolean =
+    items.none { it.key in BASE_PERMISSION_KEYS && !it.granted && it.actionable }
+
+/**
+ * 最小权限状态。放在 shared 是为了让「完成基础申请即进入」有纯函数回归测试，
+ * 不让 UI 模块反向依赖 Android 平台代码。
+ */
+data class PermissionCheckState(
+    val key: String,
+    val granted: Boolean,
+    val actionable: Boolean = true,
+)
 
 /** 功能 → 该功能的 Android 权限 key。这里用字面值，避免 shared 反向依赖 app 模块。 */
 fun permissionKeysForFeature(feature: String): Set<String> = when (feature) {

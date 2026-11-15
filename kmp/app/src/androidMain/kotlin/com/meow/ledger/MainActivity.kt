@@ -8,11 +8,16 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import com.meow.ledger.platform.AndroidPermissionGateway
 import com.meow.ledger.platform.BillAlarmReceiver
 import com.meow.ledger.platform.PermissionStatus
 import com.meow.ledger.platform.ScreenCaptureActivity
 import com.meow.ledger.platform.ScreenCaptureTileService
+import com.meow.ledger.shared.auto.BASE_PERMISSION_KEYS
+import com.meow.ledger.shared.auto.PermissionCheckState
+import com.meow.ledger.shared.auto.basePermissionsSatisfied
 import com.meow.ledger.shared.auto.DEFAULT_WEBVIEW_URL
 import com.meow.ledger.shared.auto.DeepLinkTarget
 import com.meow.ledger.shared.auto.KEY_PERMISSION_INTRO_SHOWN
@@ -30,28 +35,58 @@ class MainActivity : ComponentActivity() {
     private val target = mutableStateOf(DeepLinkTarget(DeepLinkTarget.Kind.MAIN))
     private lateinit var gateway: AndroidPermissionGateway
     private lateinit var host: EntryHost
+    private val permissionIntroState = MutableStateFlow(false)
     private var guidedKeys = emptyList<String>()
     private var guidedIndex = 0
+    /** 逐项申请完全权限的流程是否在进行；拒绝也算处理完。 */
+    private var fullPermissionTour = false
     private var launchSeq = 0L
+    /** 首次引导主动拉起 runtime 弹窗；其回调处理完即放行，页内单项申请不触发。 */
+    private var introRuntimeLaunched = false
 
     private val requestPermissions =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             permissions.value = gateway.statuses().map(::toItem)
+            val baseHandled = basePermissionsSatisfied(
+                permissions.value.map { PermissionCheckState(it.key, it.granted, it.actionable) },
+            )
+            if (fullPermissionTour) {
+                startFullPermissionTour()
+            } else if (introRuntimeLaunched && baseHandled) {
+                introRuntimeLaunched = false
+                finishPermissionIntro()
+            }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         gateway = AndroidPermissionGateway(this)
+        permissionIntroState.value = SettingsStore(AppGraph.database).flag(KEY_PERMISSION_INTRO_SHOWN, false)
         permissions.value = gateway.statuses().map(::toItem)
         host = object : EntryHost {
             override fun permissions(): List<PermissionItem> = permissions.value
 
-            override fun requestPermissions() {
+            override fun requestBasePermissions() {
+                fullPermissionTour = false
                 val missing = gateway.missingRuntimePermissions().toTypedArray()
                 if (missing.isEmpty()) {
                     permissions.value = gateway.statuses().map(::toItem)
+                    finishPermissionIntro()
                 } else {
+                    introRuntimeLaunched = true
+                    requestPermissions.launch(missing)
+                }
+            }
+
+            override fun requestFullPermissions() {
+                fullPermissionTour = true
+                val missing = gateway.missingRuntimePermissions().toTypedArray()
+                if (missing.isEmpty()) {
+                    permissions.value = gateway.statuses().map(::toItem)
+                    startFullPermissionTour()
+                } else {
+                    introRuntimeLaunched = true
                     requestPermissions.launch(missing)
                 }
             }
@@ -78,12 +113,13 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            override val permissionIntroState: StateFlow<Boolean> =
+                this@MainActivity.permissionIntroState
+
             override fun permissionIntroSeen(): Boolean =
                 SettingsStore(AppGraph.database).flag(KEY_PERMISSION_INTRO_SHOWN, false)
 
-            override fun markPermissionIntroSeen() {
-                SettingsStore(AppGraph.database).setFlag(KEY_PERMISSION_INTRO_SHOWN, true)
-            }
+            override fun markPermissionIntroSeen() = finishPermissionIntro()
 
             override fun openSettings(key: String) = gateway.openSettings(key)
 
@@ -165,11 +201,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // 回前台时同步桌面小组件的今日收支。
+        // 回前台时同步桌面小组件的今日收支；只处理真正离开过本页的返回。
         com.meow.ledger.platform.AppWidgetReceiver.refresh(this)
         if (::gateway.isInitialized) {
             permissions.value = gateway.statuses().map(::toItem)
-            if (guidedIndex < guidedKeys.size) {
+        }
+    }
+
+    override fun onRestart() {
+        super.onRestart()
+        if (::gateway.isInitialized) {
+            permissions.value = gateway.statuses().map(::toItem)
+            if (guidedKeys.isNotEmpty() && guidedIndex < guidedKeys.size) {
                 val key = guidedKeys[guidedIndex]
                 if (gateway.statuses().firstOrNull { it.key == key }?.granted == true) {
                     guidedIndex++
@@ -179,9 +222,29 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** 完全权限：只拉起第一项可选系统设置；用户处理完返回即放行，不串联厂商设置页。 */
+    private fun startFullPermissionTour() {
+        val optional = gateway.statuses()
+            .filter { !it.granted && it.actionable && it.key !in BASE_PERMISSION_KEYS }
+        if (optional.isEmpty()) {
+            finishPermissionIntro()
+            return
+        }
+        finishPermissionIntro()
+        gateway.openSettings(optional.first().key)
+    }
+
     private fun openNextGuidedSetting() {
-        if (guidedIndex >= guidedKeys.size) return
-        gateway.openSettings(guidedKeys[guidedIndex])
+        if (guidedIndex < guidedKeys.size) gateway.openSettings(guidedKeys[guidedIndex])
+    }
+
+    private fun finishPermissionIntro() {
+        fullPermissionTour = false
+        introRuntimeLaunched = false
+        guidedKeys = emptyList()
+        guidedIndex = 0
+        SettingsStore(AppGraph.database).setFlag(KEY_PERMISSION_INTRO_SHOWN, true)
+        permissionIntroState.value = true
     }
 
     private fun toItem(status: PermissionStatus): PermissionItem =

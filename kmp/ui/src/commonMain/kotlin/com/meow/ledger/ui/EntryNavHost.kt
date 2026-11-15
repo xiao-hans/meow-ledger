@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.meow.ledger.shared.auto.DeepLinkTarget
 import com.meow.ledger.shared.auto.DEFAULT_WEBVIEW_URL
+import com.meow.ledger.shared.auto.BASE_PERMISSION_KEYS
 import com.meow.ledger.shared.auto.THEME_SYSTEM
 import com.meow.ledger.shared.auto.isAllowedWebViewUrl
 import com.meow.ledger.shared.auto.permissionKeysForFeature
@@ -43,7 +45,11 @@ import com.meow.ledger.ui.theme.paletteOf
 interface EntryHost {
     fun permissions(): List<PermissionItem>
 
-    fun requestPermissions()
+    /** 申请进入账本前必须处理的基础权限；处理完由平台侧放行。 */
+    fun requestBasePermissions()
+
+    /** 逐项申请可选权限；用户可逐项拒绝，全部处理完由平台侧放行。 */
+    fun requestFullPermissions()
 
     /** 只申请/打开清单中的一项；每项都是可选的。 */
     fun requestPermission(key: String)
@@ -52,6 +58,9 @@ interface EntryHost {
     fun permissionIntroSeen(): Boolean
 
     fun markPermissionIntroSeen()
+
+    /** 引导完成后置为 true；Compose 据此自动切到主界面，不再依赖页面重组刷新。 */
+    val permissionIntroState: kotlinx.coroutines.flow.StateFlow<Boolean>
 
     /** 逐项跳转；实现方每次只启动一个系统设置页，避免连续覆盖。 */
     fun openSettings(key: String)
@@ -106,20 +115,15 @@ fun EntryNavHost(
 ) {
     // 入口页与主界面共用同一套三态主题（跟随系统 / 浅色 / 深色），避免手动切主题后配色错乱（§6.8）。
     val palette = paletteOf(theme)
-    // 首次引导只自动弹一次；之后从「我的 → 权限与隐私」或对应功能按需打开。
-    var introDismissed by remember { mutableStateOf(host?.permissionIntroSeen() == true) }
+    // 首次引导只自动弹一次；平台侧完成两类申请后即时放行。
+    val introSeen = (host?.permissionIntroState
+        ?: kotlinx.coroutines.flow.MutableStateFlow(false)).collectAsState().value
+    val introDismissed = introSeen || host?.permissionIntroSeen() == true
     var banner by remember { mutableStateOf("") }
     // 系统动作（打开浏览器/扫码/拉起截屏）只在同一个深链上执行一次；
     // launchId 让重复的磁贴点击也能重新触发，旋转屏幕则不会反复拉起外部 Activity。
     var handledKey by remember { mutableStateOf("") }
     val key = with(initialTarget) { "$kind|$clientId|$url|$paymentResult|$launchId" }
-
-    // 看到首次清单就记账：即使强杀进程或跳过申请，下次启动也不再自动弹。
-    LaunchedEffect(host, introDismissed, initialTarget.kind) {
-        if (host != null && !introDismissed && initialTarget.kind == DeepLinkTarget.Kind.MAIN) {
-            host.markPermissionIntroSeen()
-        }
-    }
 
     LaunchedEffect(key) {
         if (key == handledKey || host == null) return@LaunchedEffect
@@ -152,12 +156,9 @@ fun EntryNavHost(
             if (host != null && !introDismissed && firstLaunch) {
                 PermissionGate(
                     items = host.permissions(),
-                    onRequest = host::requestPermissions,
+                    onRequestBase = host::requestBasePermissions,
+                    onRequestFull = host::requestFullPermissions,
                     onOpenItem = host::requestPermission,
-                    onContinue = {
-                        host.markPermissionIntroSeen()
-                        introDismissed = true
-                    },
                 )
             } else {
                 content(initialTarget)
@@ -193,8 +194,8 @@ private fun StatusBanner(message: String, modifier: Modifier = Modifier, onDismi
 }
 
 /**
- * 按功能列权限的清单。首次引导、我的页和上下文引导共用同一套 UI；
- * 每项都是可选、可单独申请，也不会把用户一次性送去多个系统设置页。
+ * 权限清单按「进入账本前的基础权限」与「自动记账等可选权限」两类分组。
+ * 单项仍可单独打开系统页，不会一次性送去多个设置页。
  */
 @Composable
 fun PermissionChecklist(
@@ -202,7 +203,11 @@ fun PermissionChecklist(
     onOpen: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    items.forEach { item ->
+    val base = items.filter { it.key in BASE_PERMISSION_KEYS }
+    val optional = items.filter { it.key !in BASE_PERMISSION_KEYS }
+
+    @Composable
+    fun PermissionRow(item: PermissionItem) {
         Row(
             modifier
                 .fillMaxWidth()
@@ -234,6 +239,20 @@ fun PermissionChecklist(
             }
         }
     }
+
+    if (base.isNotEmpty()) {
+        Text("基础权限 · 进入前申请", color = LocalPalette.current.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        base.forEach { PermissionRow(it) }
+    }
+    if (optional.isNotEmpty()) {
+        Text("自动记账等可选权限", color = LocalPalette.current.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            "每项都能拒绝；进入账本后仍可在「我的 → 权限设置」逐项开启，不影响手工记账和全部免费功能。",
+            color = LocalPalette.current.textSecondary,
+            fontSize = 12.sp,
+        )
+        optional.forEach { PermissionRow(it) }
+    }
 }
 
 /** 我的 → 权限与隐私：随时可回来看清单，并只申请自己需要的那一项。 */
@@ -251,7 +270,7 @@ fun PermissionSettingsPage(onBack: () -> Unit) {
         Text("< 返回", color = palette.brand, modifier = Modifier.clickable(onClick = onBack))
         Text("权限与隐私", color = palette.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Text(
-            "每项权限对应一个功能，全部可选。可以现在开启，也可以以后用到该功能时再开启；不开启不影响手工记账和全部免费功能。",
+            "进入账本前需处理基础权限；自动记账等权限均为可选，每项都能拒绝，也可以以后用到对应功能时再开启。不开启可选权限不影响手工记账和全部免费功能。",
             color = palette.textSecondary,
             fontSize = 13.sp,
         )
@@ -308,9 +327,9 @@ fun ContextPermissionDialog(
 @Composable
 private fun PermissionGate(
     items: List<PermissionItem>,
-    onRequest: () -> Unit,
+    onRequestBase: () -> Unit,
+    onRequestFull: () -> Unit,
     onOpenItem: (String) -> Unit,
-    onContinue: () -> Unit,
 ) {
     val palette = LocalPalette.current
     Column(
@@ -322,21 +341,21 @@ private fun PermissionGate(
     ) {
         Text("进入账本前", color = palette.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Text(
-            "下面按功能列出所有权限，全部可选：可以现在逐项开启，也可以以后用到对应功能时再开启。拒绝不影响手工记账，本机不支持的项会写清原因。",
+            "分两类申请：基础权限处理完即进入账本；申请完全权限会再打开可选权限的系统设置，返回后即可使用，每项都能拒绝。本机不支持的项会写清原因。",
             color = palette.textSecondary,
             fontSize = 13.sp,
         )
         PermissionChecklist(items, onOpenItem)
         Button(
-            onClick = onRequest,
+            onClick = onRequestBase,
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = palette.brand, contentColor = palette.cardBg),
-        ) { Text("申请基础权限（可跳过）") }
+        ) { Text("申请基础权限并进入") }
         Button(
-            onClick = onContinue,
+            onClick = onRequestFull,
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = palette.chipFill, contentColor = palette.textPrimary),
-        ) { Text("继续使用本地记账") }
+        ) { Text("申请完全权限") }
     }
 }
 

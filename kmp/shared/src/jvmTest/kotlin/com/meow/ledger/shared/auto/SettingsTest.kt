@@ -58,6 +58,27 @@ class SettingsTest {
         assertEquals(setOf("notification", "exact_alarm"), permissionKeysForFeature("reminder"))
         assertEquals(setOf("battery"), permissionKeysForFeature("keep_alive"))
         assertEquals(emptySet(), permissionKeysForFeature("manual_bill"))
+        assertEquals(setOf("notification", "media_images", "camera"), BASE_PERMISSION_KEYS)
+    }
+
+    @Test
+    fun basePermissionsAreHandledEvenWhenDeniedOrUnsupported() {
+        val all = BASE_PERMISSION_KEYS.map { PermissionCheckState(it, granted = false) }
+        assertFalse(basePermissionsSatisfied(all))
+        assertTrue(basePermissionsSatisfied(all.map { it.copy(granted = true) }))
+        // 拒绝一次系统弹窗仍算处理完，不能被永久挡在首页外。
+        assertTrue(basePermissionsSatisfied(all.map { it.copy(actionable = false) }))
+        // 可选权限永远不参与基础权限是否完成。
+        assertFalse(
+            basePermissionsSatisfied(
+                listOf(
+                    PermissionCheckState("notification", granted = true),
+                    PermissionCheckState("media_images", granted = true),
+                    PermissionCheckState("camera", granted = false),
+                    PermissionCheckState("accessibility", granted = false),
+                ),
+            ),
+        )
     }
 
     @Test
