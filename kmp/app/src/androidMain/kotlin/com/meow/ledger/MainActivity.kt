@@ -25,6 +25,7 @@ import com.meow.ledger.shared.auto.SettingsStore
 import com.meow.ledger.shared.auto.isAllowedWebViewUrl
 import com.meow.ledger.shared.auto.parseDeepLink
 import com.meow.ledger.shared.auto.parseExplicitRoute
+import com.meow.ledger.shared.manage.QqAuth
 import com.meow.ledger.ui.AppGraph
 import com.meow.ledger.ui.EntryHost
 import com.meow.ledger.ui.MeowApp
@@ -165,6 +166,32 @@ class MainActivity : ComponentActivity() {
             }
 
             override fun openTicket(): String = "已打开票据识别，选图或粘贴文本后结果只进待确认队列。"
+
+            /**
+             * QQ 授权：装了 QQ 先试 `mqq://`，否则走 Web 授权页。
+             * 两条都失败就回一句人话，让用户改用「粘贴授权回调」。
+             */
+            override fun openQqAuth(url: String): String {
+                val mqq = runCatching {
+                    startActivity(
+                        Intent(Intent.ACTION_VIEW, Uri.parse(com.meow.ledger.shared.manage.QqAuth.mqqUrl()))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                    true
+                }.getOrDefault(false)
+                if (mqq) return "已请求打开 QQ；授权后回到本页。"
+                val web = runCatching {
+                    startActivity(
+                        Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                    true
+                }.getOrDefault(false)
+                return if (web) {
+                    "已打开 QQ 授权网页；授权后回到本页。"
+                } else {
+                    "没有可用的浏览器或 QQ 客户端，请复制授权回调串粘贴到下方。"
+                }
+            }
 
             /** 旧版支付回调：只记录状态说明，不识别订单或会员权益。 */
             override fun openPaymentCallback(result: String): String {
@@ -314,6 +341,10 @@ class MainActivity : ComponentActivity() {
             else -> parseExplicitRoute(explicit).copy(launchId = id)
         }
         val data = intent?.data ?: return DeepLinkTarget(DeepLinkTarget.Kind.MAIN, launchId = id)
+        // QQ 授权回调走自家 scheme：原始串整条交给解析器，别在这里拆参数。
+        if (data.scheme == QqAuth.REDIRECT_SCHEME) {
+            return DeepLinkTarget(DeepLinkTarget.Kind.QQ_AUTH, url = data.toString(), launchId = id)
+        }
         if (data.scheme != "meowledger") return DeepLinkTarget(DeepLinkTarget.Kind.MAIN, launchId = id)
         val query: (String) -> String? = { key ->
             runCatching { data.getQueryParameter(key) }.getOrNull()

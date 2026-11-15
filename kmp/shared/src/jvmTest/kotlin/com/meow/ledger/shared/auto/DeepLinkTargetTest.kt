@@ -51,6 +51,14 @@ class DeepLinkTargetTest {
     }
 
     @Test
+    fun qqAuthDeepLinkCarriesRawCallback() {
+        val raw = "tencent101983842://auth#access_token=abc&openid=XYZ"
+        val target = parseDeepLink("qq-auth", params("raw" to raw))
+        assertEquals(DeepLinkTarget.Kind.QQ_AUTH, target.kind)
+        assertEquals(raw, target.url)
+    }
+
+    @Test
     fun paymentCarriesOrderIdAndResult() {
         val target = parseDeepLink("wx", params("result" to "ok", "orderId" to "o123"))
         assertEquals(DeepLinkTarget.Kind.PAYMENT, target.kind)

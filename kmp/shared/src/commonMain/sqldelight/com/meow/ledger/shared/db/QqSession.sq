@@ -1,0 +1,31 @@
+-- QQ 登录会话（AH 账号体系）。样本 `com.ai.h` 的 QQ 登录没有专用换取端点：
+-- 客户端把 QQ 授权结果直接提交 `POST /auth/login`（`is_third_party=true`），
+-- 返回 `access_token` / `refresh_token` 与用户对象。这些状态没有对应列，
+-- 单开一张表，避免把令牌塞进 `member_profile` 的语义里。
+--
+-- 只存登录态，不存密码。`account` 为 QQ 侧 32 位大写十六进制标识。
+CREATE TABLE qq_session (
+  id INTEGER NOT NULL PRIMARY KEY,
+  account TEXT NOT NULL DEFAULT '',
+  nickname TEXT NOT NULL DEFAULT '',
+  avatar_url TEXT NOT NULL DEFAULT '',
+  user_no INTEGER NOT NULL DEFAULT 0,
+  remote_id INTEGER NOT NULL DEFAULT 0,
+  access_token TEXT NOT NULL DEFAULT '',
+  refresh_token TEXT NOT NULL DEFAULT '',
+  access_expires_at INTEGER NOT NULL DEFAULT 0,
+  refresh_expires_at INTEGER NOT NULL DEFAULT 0,
+  create_time INTEGER NOT NULL DEFAULT 0,
+  update_time INTEGER NOT NULL DEFAULT 0
+);
+
+selectSession:
+SELECT * FROM qq_session WHERE id = ?;
+
+upsertSession:
+INSERT OR REPLACE INTO qq_session(id, account, nickname, avatar_url, user_no, remote_id,
+  access_token, refresh_token, access_expires_at, refresh_expires_at, create_time, update_time)
+VALUES ?;
+
+deleteSession:
+DELETE FROM qq_session WHERE id = ?;

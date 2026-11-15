@@ -75,3 +75,6 @@ deleteAllBehaviorEvents:
 DELETE FROM behavior_event;
 deleteAllGroups:
 DELETE FROM group_vip;
+
+deleteAllQqSessions:
+DELETE FROM qq_session;

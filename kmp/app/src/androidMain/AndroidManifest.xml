@@ -64,6 +64,13 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="meowledger" />
             </intent-filter>
+            <!-- QQ 登录回调：scheme 与样本 appid 绑定（文档 §3，B 级静态证据）。 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="tencent101983842" />
+            </intent-filter>
         </activity>
 
         <!-- 启动、深链与第三方回调使用同一个 Compose 导航容器，避免界面状态在 Activity 间丢失。 -->

@@ -80,6 +80,12 @@ interface EntryHost {
     /** 票据识别：确认 OCR 引擎可用并返回状态；真正的选图在 OcrPage。 */
     fun openTicket(): String
 
+    /**
+     * 打开 QQ 授权页。与 [openWebView] 分开：授权页在腾讯域名下，
+     * 不能走「只允许自家域名」的白名单，也不该被降级成 App 内帮助页。
+     */
+    fun openQqAuth(url: String): String
+
     /** 旧版支付回调：只返回状态说明，不打开付费页面。 */
     fun openPaymentCallback(result: String): String
 

@@ -64,6 +64,7 @@ fun clearLocalData(db: MeowDatabase, today: Long) {
         q.deleteAllContracts()
         q.deleteAllBehaviorEvents()
         q.deleteAllGroups()
+        q.deleteAllQqSessions()
     }
     // 重建默认值：MainApp 每次组合也会调 seedIfEmpty，但清空后账单表为空，
     // 这里直接补齐，保证危险操作后 App 立刻可用。

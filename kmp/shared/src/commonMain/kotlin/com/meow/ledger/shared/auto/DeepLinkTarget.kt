@@ -31,6 +31,8 @@ data class DeepLinkTarget(
         PENDING,
         BILL_EDIT,
         PAYMENT,
+        /** QQ 授权回调（`tencent101983842://auth#access_token=…`），原始串放在 [url]。 */
+        QQ_AUTH,
     }
 }
 
@@ -38,6 +40,7 @@ data class DeepLinkTarget(
 fun parseDeepLink(host: String?, query: (String) -> String?): DeepLinkTarget {
     val param = { key: String -> query(key).orEmpty() }
     return when (host?.trim()?.lowercase()) {
+        "qq-auth" -> DeepLinkTarget(DeepLinkTarget.Kind.QQ_AUTH, url = param("raw"))
         null, "", "main", "interstitial" -> DeepLinkTarget(DeepLinkTarget.Kind.MAIN)
         "permission" -> DeepLinkTarget(DeepLinkTarget.Kind.PERMISSION)
         "scan" -> DeepLinkTarget(DeepLinkTarget.Kind.SCAN)

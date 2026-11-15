@@ -125,7 +125,9 @@ private fun MainApp(
             when (target.kind) {
                 DeepLinkTarget.Kind.BILL_EDIT -> 0
                 DeepLinkTarget.Kind.TICKET, DeepLinkTarget.Kind.CAPTURE, DeepLinkTarget.Kind.PENDING -> 2
-                DeepLinkTarget.Kind.PAYMENT, DeepLinkTarget.Kind.WEBVIEW -> 3
+                DeepLinkTarget.Kind.PAYMENT, DeepLinkTarget.Kind.WEBVIEW,
+                DeepLinkTarget.Kind.QQ_AUTH,
+                -> 3
                 else -> 0
             },
         )
@@ -172,6 +174,7 @@ private fun MainApp(
                 DeepLinkTarget.Kind.SCAN -> "book-join"
                 DeepLinkTarget.Kind.PAYMENT -> ""
                 DeepLinkTarget.Kind.WEBVIEW -> "help"
+                DeepLinkTarget.Kind.QQ_AUTH -> "qq-login"
                 else -> ""
             },
         )
@@ -440,6 +443,7 @@ private fun MainApp(
                             { minePage = "" },
                             { openBill = it },
                             paymentNotice,
+                            if (target.kind == DeepLinkTarget.Kind.QQ_AUTH) target.url else "",
                         )
                     } else {
                         MineHome(AccountRepository(AppGraph.database, AppGraph.sync).profile()) { minePage = it }
@@ -501,6 +505,8 @@ private fun applyTarget(
             setPaymentNotice(paymentStatusOf(target.paymentResult))
         }
         DeepLinkTarget.Kind.WEBVIEW -> { setTab(3); setMinePage("help") }
+        // QQ 授权回调：落到登录页，原始串由 MinePages 交给 QqLoginPage 解析。
+        DeepLinkTarget.Kind.QQ_AUTH -> { setTab(3); setMinePage("qq-login") }
         DeepLinkTarget.Kind.PERMISSION, DeepLinkTarget.Kind.MAIN -> {
             setTab(0)
             setComposing(false)
@@ -597,6 +603,7 @@ private fun MinePages(
     onBack: () -> Unit,
     onOpenBill: (String) -> Unit,
     paymentNotice: String = "",
+    qqAuthRaw: String = "",
 ) {
     val database = AppGraph.database
     val month = com.meow.ledger.shared.stats.periodSpan(com.meow.ledger.shared.stats.TrendPeriod.MONTH, 1).second / 100
@@ -623,6 +630,8 @@ private fun MinePages(
             onOpen,
             onBack,
             paymentNotice,
+            qqAuthRaw,
+            { url -> AppGraph.permissionHost?.openQqAuth(url) ?: "" },
         )
     }
 }

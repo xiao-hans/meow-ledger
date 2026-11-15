@@ -105,6 +105,24 @@ status: W1.1–W1.4 完成；下一切片 W2.1
 - [x] `:shared:jvmTest :app:assembleDebug :app:assembleDebugAndroidTest checkAdDeps` 绿
 - 备注：仪器测试不拉起 Compose 界面——vivo 拦后台 Activity 启动会让 `ActivityScenario` 无限等 RESUMED；改为断言 `AppGraph.database` 已注入，Application 启动链路仍被每个用例覆盖。
 
+## L1 · QQ 登录（只登录，不注册）
+
+状态：代码完成，JVM 测试与构建绿；模拟器验证待执行。
+
+依据：`D:\workspace\AHVideo\AH视频_QQ登录接口速查.md`、`AH视频_账号体系登录注册接口文档.md`（用户 2026-11-16 指定）。
+
+- [x] `qq_session` 表（`QqSession.sq`）+ `migrations/5.sqm`，schema `version = 6`；`Clear.sq` 加 `deleteAllQqSessions`，`Seed.clearLocalData` 同步调用
+- [x] `v5.sql` fixture + `MigrationTest` 升到 v6，新增 `v5UpgradesToV6AddsQqSessionWithoutLosingData`
+- [x] `QqAuth`：appid `101983842`、scheme `tencent101983842`、`authorizeUrl`、`parseCallback`（fragment / query / JSONP 三种形态）
+- [x] `AhAuthClient` 三个端点：`POST /auth/login`、`GET /user`、`POST /auth/refresh`；`KtorAhAuthClient` 走明文 JSON，不复用 `MeowApi` 信封
+- [x] `AppAuthToken`：按实测形状复刻（前 32 字节常量 + ts 派生尾）；签名算法未取到，真实服务端会 `403`
+- [x] `SandboxAhAuthClient`：默认路径，令牌前缀 `sandbox-`，不冒充真实令牌
+- [x] `QqLoginRepository`：登录成功才落库并同步 `member_profile`；刷新失败不清会话；退出只清本地
+- [x] UI：`AccountHome` 顶栏 QQ 登录入口 + `qq-login` 子页（授权 / 粘贴回调 / 刷新 / 退出 / AH 地址）
+- [x] 深链：`Kind.QQ_AUTH` + Manifest `tencent101983842` scheme + `EntryHost.openQqAuth`
+- [x] `:shared:jvmTest` 264 用例 0 失败；`:app:assembleDebug`、`checkAdDeps` 绿
+- [ ] 模拟器验证：授权回调解析 → 沙箱登录 → 刷新 → 退出；AH 地址留空/填写两种状态
+
 ## W2 / W3 / W4
 
 见 design §1–§5；本文件按切片追加验证记录与提交号。
@@ -121,6 +139,4 @@ status: W1.1–W1.4 完成；下一切片 W2.1
 | W2.2 | `a93fc2f` | 246 用例 + assembleDebug + checkAdDeps 绿 |
 | W2.3 | `ef01067` | 248 用例 + assembleDebug + checkAdDeps 绿 |
 | W2.4 | `d46de72` | 248 用例 + assembleDebug + checkAdDeps 绿 |
-| W3.0 | `188b002` | jvmTest + assembleDebug + assembleDebugAndroidTest + checkAdDeps 绿；真机执行待安装确认 |
-| W1.3 | `1959120` | jvmTest 239 + assembleDebug + checkAdDeps 绿 |
-| W1.4 | `308d4ef` | jvmTest 243 + assembleDebug + checkAdDeps 绿 |
+| W3.0 | `188b002` | jvmTest + assembleDebug + assembleDebugAndroidTest + checkAdDeps 绿；真机 `OK (3 tests)` |

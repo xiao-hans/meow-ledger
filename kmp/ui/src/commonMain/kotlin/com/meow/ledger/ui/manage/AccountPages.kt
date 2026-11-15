@@ -63,6 +63,8 @@ fun AccountPage(
     onOpen: (String) -> Unit = {},
     onBack: () -> Unit,
     initialNotice: String = "",
+    qqAuthRaw: String = "",
+    onOpenQq: (String) -> String = { "" },
 ) {
     // 外部入口带来的状态先显示出来，不静默改写本机数据。
     var notice by remember { mutableStateOf(initialNotice) }
@@ -73,7 +75,8 @@ fun AccountPage(
     ) {
         val onNotice: (String) -> Unit = { notice = it; noticeIsError = true }
         when (page) {
-            "account" -> AccountHome(account, onBack, onNotice)
+            "account" -> AccountHome(account, database, onOpen, onBack, onNotice)
+            "qq-login" -> QqLoginPage(database, settings, qqAuthRaw, onOpenQq, onBack, onNotice)
             "change-phone" -> ChangePhoneHome(account, onBack, onNotice)
             "imports" -> ImportLogHome(account, onOpen, onBack, onNotice)
             "migration" -> MigrationHome(account, onBack, onNotice)
@@ -97,7 +100,13 @@ fun AccountPage(
 }
 
 @Composable
-private fun AccountHome(account: AccountRepository, onBack: () -> Unit, onNotice: (String) -> Unit) {
+private fun AccountHome(
+    account: AccountRepository,
+    database: MeowDatabase,
+    onOpen: (String) -> Unit,
+    onBack: () -> Unit,
+    onNotice: (String) -> Unit,
+) {
     val palette = LocalPalette.current
     var version by remember { mutableStateOf(0) }
     val profile = remember(version) { account.profile() }
@@ -107,6 +116,10 @@ private fun AccountHome(account: AccountRepository, onBack: () -> Unit, onNotice
     var nickname by remember { mutableStateOf(profile.nickname) }
     var confirm by remember { mutableStateOf(false) }
     BackHeader("账号", onBack)
+    // QQ 登录排在最前：这是本 App 唯一的联网账号入口，手机号登录只是本机演示。
+    QqLoginSummary(remember(database) { com.meow.ledger.shared.manage.QqLoginRepository(database) }) {
+        onOpen("qq-login")
+    }
     GlassCard {
         Text(profile.nickname.ifBlank { "未登录" }, color = palette.textPrimary)
         Text(

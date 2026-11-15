@@ -63,8 +63,9 @@ sqldelight {
             // 否则老安装查询不存在的表会直接崩溃。
             // 4：修复「版本戳已是 3、结构却漂移」的历史库（见 migrations/3.sqm 头注释）。
             // 5：ticket_image（OCR 多选原图/缩略图路径，见 migrations/4.sqm）。
+            // 6：qq_session（QQ 登录会话，见 migrations/5.sqm）。
             // 此后每次改 .sq 必须同步加 N.sqm 并把 version +1，否则老安装结构漂移、启动即崩。
-            version = 5
+            version = 6
         }
     }
 }

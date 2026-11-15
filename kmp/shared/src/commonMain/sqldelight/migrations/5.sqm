@@ -1,0 +1,18 @@
+-- 5 → 6：QQ 登录会话表（见 QqSession.sq）。
+--
+-- 只有新表，没有列变更，因此 CREATE TABLE IF NOT EXISTS 在所有历史路径上都安全：
+-- v1/v2/v3/v3漂移/v4/v5 的老库都不存在 qq_session。
+CREATE TABLE IF NOT EXISTS qq_session (
+  id INTEGER NOT NULL PRIMARY KEY,
+  account TEXT NOT NULL DEFAULT '',
+  nickname TEXT NOT NULL DEFAULT '',
+  avatar_url TEXT NOT NULL DEFAULT '',
+  user_no INTEGER NOT NULL DEFAULT 0,
+  remote_id INTEGER NOT NULL DEFAULT 0,
+  access_token TEXT NOT NULL DEFAULT '',
+  refresh_token TEXT NOT NULL DEFAULT '',
+  access_expires_at INTEGER NOT NULL DEFAULT 0,
+  refresh_expires_at INTEGER NOT NULL DEFAULT 0,
+  create_time INTEGER NOT NULL DEFAULT 0,
+  update_time INTEGER NOT NULL DEFAULT 0
+);
