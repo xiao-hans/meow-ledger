@@ -25,3 +25,6 @@ kmp/.kotlin/
 kmp/local.properties
 kmp/.gradle-java.properties
 kmp/app/src/androidTest/
+
+# 本地真机截图与临时产物
+/build/
