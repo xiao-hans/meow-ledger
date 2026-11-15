@@ -42,6 +42,7 @@ fun clearLocalData(db: MeowDatabase, today: Long) {
         q.deleteAllBillRemarks()
         q.deleteAllRules()
         q.deleteAllAutoEvents()
+        q.deleteAllTicketImages()
         q.deleteAllSettings()
         q.deleteAllRemoteConfig()
         q.deleteAllFixedBills()

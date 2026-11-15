@@ -31,6 +31,8 @@ deleteAllRules:
 DELETE FROM rule;
 deleteAllAutoEvents:
 DELETE FROM auto_event;
+deleteAllTicketImages:
+DELETE FROM ticket_image;
 deleteAllSettings:
 DELETE FROM user_setting;
 deleteAllRemoteConfig:
