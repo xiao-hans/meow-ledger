@@ -100,8 +100,10 @@ status: W1.1–W1.4 完成；下一切片 W2.1
 - [x] `androidInstrumentedTest` + `AndroidJUnitRunner`；3 个用例：启动、迁移后列存在、深链解析
 - [x] 真机复现启动崩溃：历史构建给 `fixed_bill` 加 `not_in_budget` 却没写迁移，版本号已到新值
 - [x] `SchemaRepair`：打开库后按列名幂等补列，先于任何仓储查询执行
-- [ ] vivo V2419A 执行 `connectedDebugAndroidTest`（需在手机上允许安装）
+- [x] vivo V2419A 执行：`am instrument -w -r ...AndroidJUnitRunner` → `OK (3 tests)`（2026-11-15 20:30）
+- [x] 真机启动复核：`am start -W` COLD 822ms，落到权限引导页，logcat 无 FATAL / SQLiteException（20:31）
 - [x] `:shared:jvmTest :app:assembleDebug :app:assembleDebugAndroidTest checkAdDeps` 绿
+- 备注：仪器测试不拉起 Compose 界面——vivo 拦后台 Activity 启动会让 `ActivityScenario` 无限等 RESUMED；改为断言 `AppGraph.database` 已注入，Application 启动链路仍被每个用例覆盖。
 
 ## W2 / W3 / W4
 
