@@ -2,7 +2,7 @@
 title: 剩余缺口收口实施计划
 date: 2026-11-15
 design: docs/superpowers/specs/2026-11-15-remaining-gaps-closure-design.md
-status: W1.1–W1.3 完成；下一切片 W1.4
+status: W1.1–W1.4 完成；下一切片 W2.1
 ---
 
 # 剩余缺口收口实施计划
@@ -48,7 +48,14 @@ status: W1.1–W1.3 完成；下一切片 W1.4
 
 ## W1.4 AcEvents 目录 + 本地上报队列
 
-状态：未开始。
+状态：完成（提交号见提交表）。
+
+- [x] `AcEvents`：probe 的 123 个 `ac_*` + 在用 4 个 = 127；`isAllowed` 放行 `feedback` / `token_refresh`
+- [x] `AccountRepository(db, sync?)`：未知 kind → null 不写库；合法 kind 写 `behavior_event` 并入队 `Behavior/Add`
+- [x] `Bills` / `Auto` 私有 track 删除，统一走 `AccountRepository(db, sync).track`
+- [x] `AppGraph.sync` 接到 `AutoRepository` / `CaptureBridge` / `ScreenCaptureService` / UI 各入口
+- [x] 测试：未知 kind 拒绝、Behavior/Add 入队、`remoteEnabled=false` 仍入队、feedback/token 放行；243 用例绿
+- [x] `:shared:jvmTest :app:assembleDebug checkAdDeps` 绿
 
 ## W2 / W3 / W4
 
@@ -61,3 +68,4 @@ status: W1.1–W1.3 完成；下一切片 W1.4
 | W1.1 | `ca3d62e` | MigrationTest --rerun-tasks 绿 |
 | W1.2 | `6d353fe` | jvmTest + assembleDebug + checkAdDeps 绿 |
 | W1.3 | `1959120` | jvmTest 239 + assembleDebug + checkAdDeps 绿 |
+| W1.4 | `308d4ef` | jvmTest 243 + assembleDebug + checkAdDeps 绿 |
