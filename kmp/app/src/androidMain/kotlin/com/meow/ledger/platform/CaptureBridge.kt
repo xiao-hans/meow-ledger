@@ -40,7 +40,7 @@ object CaptureBridge {
         if (job?.isActive == true) return
         job = scope.launch(Dispatchers.Default) {
             val settings = SettingsStore(AppGraph.database)
-            val repo = AutoRepository(AppGraph.database)
+            val repo = AutoRepository(AppGraph.database, AppGraph.sync)
             while (isActive) {
                 val batch = CandidateQueue.drain()
                 if (batch.isEmpty()) {

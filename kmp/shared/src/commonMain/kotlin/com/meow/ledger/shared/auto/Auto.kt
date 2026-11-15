@@ -7,6 +7,8 @@ import com.meow.ledger.shared.db.Auto_event
 import com.meow.ledger.shared.db.Bill
 import com.meow.ledger.shared.db.MeowDatabase
 import com.meow.ledger.shared.db.Rule
+import com.meow.ledger.shared.manage.AccountRepository
+import com.meow.ledger.shared.network.SyncEngine
 import kotlin.random.Random
 
 /** 通知识别、无障碍识别、截屏 OCR 三路采集。Web 没有系统级权限，输入是用户粘贴的文本。 */
@@ -171,7 +173,7 @@ data class PendingEdit(
  * 采集入口：原始文本 → 解析 → 规则 → 去重 → 写 auto_event。
  * 结果只进待确认队列，绝不静默入账。
  */
-class AutoRepository(private val db: MeowDatabase) {
+class AutoRepository(private val db: MeowDatabase, private val sync: SyncEngine? = null) {
     fun rules(): List<Rule> = db.ruleQueries.selectAll().executeAsList()
 
     fun pending(): List<Auto_event> = db.autoQueries.selectPending().executeAsList()
@@ -218,7 +220,7 @@ class AutoRepository(private val db: MeowDatabase) {
                 ),
             )
             created++
-            track("ac_auto_capture", "${full.merchant}|${full.money}|$source")
+            AccountRepository(db, sync).track("ac_auto_capture", "${full.merchant}|${full.money}|$source")
         }
         return CaptureResult(created, duplicate, unsupported)
     }
@@ -270,7 +272,7 @@ class AutoRepository(private val db: MeowDatabase) {
             ),
         )
         attachTicketImage(hash, imagePath, thumbPath, occurredAt)
-        track("ac_auto_capture", "${full.merchant}|${full.money}|$source")
+        AccountRepository(db, sync).track("ac_auto_capture", "${full.merchant}|${full.money}|$source")
         return CaptureResult(1, 0, 0)
     }
 
@@ -292,20 +294,6 @@ class AutoRepository(private val db: MeowDatabase) {
                 path = path,
                 thumb_path = thumbPath?.trim().orEmpty(),
                 create_time = occurredAt,
-            ),
-        )
-    }
-
-    /** 埋点：与 AccountRepository.track 同表，AutoRepository 只拿得到 db，就地写。 */
-    private fun track(kind: String, content: String) {
-        val now = currentTimeMillis()
-        db.accountQueries.upsertEvent(
-            com.meow.ledger.shared.db.Behavior_event(
-                id = "b$now${(0..999).random()}",
-                kind = kind,
-                content = content.take(500),
-                contact = "",
-                create_time = now,
             ),
         )
     }
@@ -355,7 +343,7 @@ class AutoRepository(private val db: MeowDatabase) {
         )
         db.billQueries.upsert(bill)
         db.autoQueries.upsert(event.copy(status = 1))
-        track("ac_auto_confirm", "$desc|$money")
+        AccountRepository(db, sync).track("ac_auto_confirm", "$desc|$money")
         return bill
     }
 

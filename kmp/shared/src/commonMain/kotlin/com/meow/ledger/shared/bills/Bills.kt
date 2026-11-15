@@ -2,6 +2,7 @@ package com.meow.ledger.shared.bills
 
 import com.meow.ledger.shared.db.Bill
 import com.meow.ledger.shared.db.MeowDatabase
+import com.meow.ledger.shared.manage.AccountRepository
 import com.meow.ledger.shared.network.SyncEngine
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add
@@ -71,7 +72,7 @@ class BillsRepository(private val db: MeowDatabase, private val sync: SyncEngine
         val existed = db.billQueries.selectOne(bill.member_id, bill.client_id).executeAsOneOrNull() != null
         db.billQueries.upsert(bill)
         applyBalance(bill)
-        track("ac_add_bill", "${bill.client_id}|${bill.money}|${bill.type}")
+        AccountRepository(db, sync).track("ac_add_bill", "${bill.client_id}|${bill.money}|${bill.type}")
         enqueueBillWrite(if (existed) "Bills/Update" else "Bills/Create", bill)
     }
 
@@ -113,20 +114,6 @@ class BillsRepository(private val db: MeowDatabase, private val sync: SyncEngine
             }
         }
         engine.enqueue("Bills/Delete", "POST", payload, clientId)
-    }
-
-    /** 埋点：与 AccountRepository.track 同表，就地写避免循环依赖。 */
-    private fun track(kind: String, content: String) {
-        val nowMillis = now()
-        db.accountQueries.upsertEvent(
-            com.meow.ledger.shared.db.Behavior_event(
-                id = "b$nowMillis${(0..999).random()}",
-                kind = kind,
-                content = content.take(500),
-                contact = "",
-                create_time = nowMillis,
-            ),
-        )
     }
 
     /** 删一笔并回滚资产余额，与 [saveWithBalance] 对称。 */

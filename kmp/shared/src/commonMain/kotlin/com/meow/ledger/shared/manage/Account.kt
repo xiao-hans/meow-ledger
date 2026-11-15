@@ -6,6 +6,9 @@ import com.meow.ledger.shared.db.MeowDatabase
 import com.meow.ledger.shared.db.Member_import_bill_file
 import com.meow.ledger.shared.db.Member_order
 import com.meow.ledger.shared.db.Member_profile
+import com.meow.ledger.shared.network.SyncEngine
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.random.Random
 
 /** 本机账号，只有一行。 */
@@ -72,8 +75,8 @@ val REMOTE_SWITCHES = listOf(
 /** 按字段名取默认值。未知字段不在表内。 */
 val REMOTE_DEFAULTS: Map<String, String> = REMOTE_SWITCHES.associate { it.key to it.default }
 
-/** 账号、导入记录、会员订单、合约与反馈。 */
-class AccountRepository(private val db: MeowDatabase) {
+/** 账号、导入记录、会员订单、合约与反馈。`sync` 可选：非 null 时埋点会入 Behavior/Add 队列。 */
+class AccountRepository(private val db: MeowDatabase, private val sync: SyncEngine? = null) {
 
     fun profile(): Member_profile =
         db.accountQueries.selectProfile(PROFILE_ID).executeAsOneOrNull()
@@ -215,8 +218,12 @@ class AccountRepository(private val db: MeowDatabase) {
 
     fun feedback(): List<Behavior_event> = db.accountQueries.selectEvents(FEEDBACK_KIND).executeAsList()
 
-    /** 通用埋点：写 behavior_event，kind 前缀 ac_ 对齐样本事件命名。 */
-    fun track(kind: String, content: String): Behavior_event {
+    /**
+     * 通用埋点：只接受 [AcEvents] 目录或内部 kind；未知 kind 返回 null 且不写库。
+     * 有 sync 时额外入队 Behavior/Add（remoteEnabled=false 仍积压本地）。
+     */
+    fun track(kind: String, content: String): Behavior_event? {
+        if (!AcEvents.isAllowed(kind)) return null
         val now = currentTimeMillis()
         val row = Behavior_event(
             id = "b$now${(0..999).random()}",
@@ -226,6 +233,18 @@ class AccountRepository(private val db: MeowDatabase) {
             create_time = now,
         )
         db.accountQueries.upsertEvent(row)
+        sync?.enqueue(
+            path = "Behavior/Add",
+            method = "POST",
+            payload = buildJsonObject {
+                put("id", row.id)
+                put("kind", row.kind)
+                put("content", row.content)
+                put("contact", row.contact)
+                put("createTime", row.create_time.toString())
+            },
+            clientId = row.id,
+        )
         return row
     }
 

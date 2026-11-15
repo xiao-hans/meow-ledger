@@ -42,11 +42,14 @@ class BillsSyncEnqueueTest {
 
     @Test
     fun `saveWithBalance writes local first then enqueues Bills Create`() {
-        val (repo, db, engine) = setup(withSync = true)
+        val (repo, db, _) = setup(withSync = true)
         repo.saveWithBalance(bill("c1"))
         assertNotNull(repo.get(0, "c1"))
-        assertEquals(1, engine!!.pendingCount())
-        val row = db.s2Queries.selectPendingSync(System.currentTimeMillis(), 100L).executeAsList().single()
+        // saveWithBalance 同时写一条 Behavior/Add 埋点；这里只断言账单写路径。
+        val billRows = db.s2Queries.selectPendingSync(System.currentTimeMillis(), 100L)
+            .executeAsList().filter { it.path != "Behavior/Add" }
+        assertEquals(1, billRows.size)
+        val row = billRows.single()
         assertEquals("Bills/Create", row.path)
         assertEquals("POST", row.method)
         assertEquals("c1", row.client_id)
@@ -56,23 +59,23 @@ class BillsSyncEnqueueTest {
 
     @Test
     fun `editing an existing bill enqueues Bills Update`() {
-        val (repo, db, engine) = setup(withSync = true)
+        val (repo, db, _) = setup(withSync = true)
         repo.saveWithBalance(bill("c1"))
         repo.saveWithBalance(bill("c1").copy(money = 2500))
         assertEquals(2500L, repo.get(0, "c1")!!.money)
-        assertEquals(2, engine!!.pendingCount())
-        val paths = db.s2Queries.selectPendingSync(System.currentTimeMillis(), 100L).executeAsList().map { it.path }
+        val paths = db.s2Queries.selectPendingSync(System.currentTimeMillis(), 100L)
+            .executeAsList().map { it.path }.filter { it != "Behavior/Add" }
         assertEquals(listOf("Bills/Create", "Bills/Update"), paths)
     }
 
     @Test
     fun `deleteWithBalance writes local first then enqueues Bills Delete`() {
-        val (repo, db, engine) = setup(withSync = true)
+        val (repo, db, _) = setup(withSync = true)
         repo.saveWithBalance(bill("c1"))
         repo.deleteWithBalance(0, "c1")
         assertEquals(null, repo.get(0, "c1"))
-        assertEquals(2, engine!!.pendingCount())
-        val paths = db.s2Queries.selectPendingSync(System.currentTimeMillis(), 100L).executeAsList().map { it.path }
+        val paths = db.s2Queries.selectPendingSync(System.currentTimeMillis(), 100L)
+            .executeAsList().map { it.path }.filter { it != "Behavior/Add" }
         assertEquals(listOf("Bills/Create", "Bills/Delete"), paths)
     }
 
@@ -129,9 +132,10 @@ class BillsSyncEnqueueTest {
     fun `flush marks queue done on success`() {
         val (repo, _, engine) = setup(withSync = true)
         repo.saveWithBalance(bill("c1"))
-        assertEquals(1, engine!!.pendingCount())
+        // 一条账单写 + 一条 Behavior/Add 埋点。
+        assertEquals(2, engine!!.pendingCount())
         val (ok, fail) = runBlocking { engine.flush() }
-        assertEquals(1 to 0, ok to fail)
+        assertEquals(2 to 0, ok to fail)
         assertEquals(0, engine.pendingCount())
     }
 }

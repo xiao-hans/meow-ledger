@@ -343,7 +343,7 @@ class ScreenCaptureService : Service() {
         if (message.isNotEmpty() && !message.contains("待确认")) {
             // 没有识别结果时也留一条本地埋点，方便在「我的」页核对失败原因。
             runCatching {
-                com.meow.ledger.shared.manage.AccountRepository(AppGraph.database)
+                com.meow.ledger.shared.manage.AccountRepository(AppGraph.database, AppGraph.sync)
                     .track("ac_capture_failed", "$SOURCE_SCREENSHOT|$message")
             }
         }
@@ -363,7 +363,7 @@ class ScreenCaptureService : Service() {
         }
         runCatching { notifyResult(message) }
         runCatching {
-            com.meow.ledger.shared.manage.AccountRepository(AppGraph.database)
+            com.meow.ledger.shared.manage.AccountRepository(AppGraph.database, AppGraph.sync)
                 .track("ac_capture_failed", "$SOURCE_SCREENSHOT|$message")
         }
         stopForegroundRemove()

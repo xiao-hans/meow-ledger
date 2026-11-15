@@ -148,7 +148,7 @@ private fun MainApp(
     var statsPeriod by rememberSaveable { mutableStateOf(TrendPeriod.MONTH) }
     var statsPage by rememberSaveable { mutableStateOf("") }
     var statsCustomRange by rememberSaveable { mutableStateOf<StatsRange?>(null) }
-    val auto = AutoRepository(AppGraph.database)
+    val auto = AutoRepository(AppGraph.database, AppGraph.sync)
     // 这些状态镜像 user_setting，开机与「清空本机数据」后都从同一份快照取值。
     val initial = remember { settings.snapshot() }
     var autoEnabled by rememberSaveable { mutableStateOf(initial.autoBill) }
@@ -432,7 +432,7 @@ private fun MainApp(
                             paymentNotice,
                         )
                     } else {
-                        MineHome(AccountRepository(AppGraph.database).profile()) { minePage = it }
+                        MineHome(AccountRepository(AppGraph.database, AppGraph.sync).profile()) { minePage = it }
                     }
                 }
                 if ((tab != 2 || autoPage.isEmpty()) && (tab != 3 || minePage.isEmpty())) Dock(
@@ -587,7 +587,7 @@ private fun MinePages(
         page.startsWith("budget") -> BudgetPage(BudgetRepository(database), month, page, onOpen, onBack)
         page == "search" -> SearchPage(ExchangeRepository(database), onOpenBill, onBack)
         page == "batch" -> BatchPage(onBack)
-        page == "export" || page == "import" || page.startsWith("import:") -> ExchangePage(ExchangeRepository(database), AccountRepository(database), page, onOpen, onBack)
+        page == "export" || page == "import" || page.startsWith("import:") -> ExchangePage(ExchangeRepository(database), AccountRepository(database, AppGraph.sync), page, onOpen, onBack)
         page.startsWith("book") -> BooksPage(BookRepository(database), page, onOpen, onBack)
         page.startsWith("asset") -> AssetsPage(AssetRepository(database), page, onOpen, onBack)
         page.startsWith("categor") || page.startsWith("tag") -> CatalogPage(CatalogRepository(database), page, onOpen, onBack)
@@ -599,7 +599,7 @@ private fun MinePages(
         else -> AccountPage(
             page,
             database,
-            AccountRepository(database),
+            AccountRepository(database, AppGraph.sync),
             settings,
             onTheme,
             onClear,
