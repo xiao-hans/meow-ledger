@@ -59,15 +59,15 @@ ad_free: 不接入广告 SDK，不调用广告请求端点
 
 ## S3 · M7 预算与 M8 统计
 
-状态：完成（提交表 `:157` 记为完成；模拟器验证通过，真机待用户配合，复制年预算与自定义区间未做，见差距表 M7/M8）。
+状态：完成（提交表 `:157` 记为完成；模拟器验证通过；2026-11-15 追加复制年预算与统计自定义区间，真机验证见 S13，差距表 M7/M8 已按当前口径更新）。
 
 1. 补齐 `budget`、`cate_budget` 和对应迁移。已做（S2 迁移 3.sqm 覆盖）。
-2. 实现 `Budget` 9 个契约方法和预算包含排除规则。已做：契约 `BudgetContracts` 9 方法、`removeCategory`、`not_in_budget` 过滤；包含排除、复制年预算未做。
-3. 实现总预算、分类预算、预算详情、统计报表、类型下钻、分类下钻和标签下钻页。已做：`ui/manage/Budget.kt`、`ui/stats/StatsDetail.kt`（cate:/tag:/tags/type/report 路由）、StatsHome 4 个入口；类型下钻用月列表替代。
+2. 实现 `Budget` 9 个契约方法和预算包含排除规则。已做：契约 `BudgetContracts` 9 方法、`removeCategory`、`not_in_budget` 过滤、包含排除视图；`copyYear` 为本地批量操作，复用现有契约端点。
+3. 实现总预算、分类预算、预算详情、统计报表、类型下钻、分类下钻和标签下钻页。已做：`ui/manage/Budget.kt`、`ui/stats/StatsDetail.kt`（cate:/tag:/tags/type/report 路由）、StatsHome 4 个入口；类型下钻用月列表替代。2026-11-15 追加 `statsCustomRange` 驱动汇总、趋势与下钻。
 4. 实现整数分聚合、月份筛选和自绘 SVG 图表。已做（净额口径 netMoney）。
-5. 为金额聚合、边界月份和包含排除规则写 JVM 测试。已做：`BudgetNotInBudgetTest`、`TagDrillTest`；100 tests 0 fail。
-6. 在真机验证预算编辑和 4 类统计下钻。模拟器已验证：分类下钻（合计 93.70·3 笔）、年度报表、返回键回上级；真机待用户配合。
-7. 更新差距表和接口对照表；提交并推送。已做（契约 41/112）。
+5. 为金额聚合、边界月份和包含排除规则写 JVM 测试。已做：`BudgetNotInBudgetTest`、`TagDrillTest`；追加 `BudgetIncludeTest` 8 用例、`CustomStatsRangeTest` 5 用例。
+6. 在真机验证预算编辑和 4 类统计下钻。模拟器已验证：分类下钻（合计 93.70·3 笔）、年度报表、返回键回上级；vivo V2419A 已验证复制年预算与自定义区间（见 S13）。
+7. 更新差距表和接口对照表；提交并推送。已做（契约 41/112；2026-11-15 再同步三份对照文档）。
 
 完成依据：9 个契约方法有实现位置；图表在深浅色模式可读；金额不出现浮点累加误差。
 
@@ -188,5 +188,6 @@ ad_free: 不接入广告 SDK，不调用广告请求端点
 | S10（权限申请与跨品牌适配） | 本提交 | `:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL；`git diff --check` 通过 | vivo V2419A 真机：冷启动权限门文案/去设置按钮/不支持原因/已开启状态截图，启动无 FATAL | 完成（其它品牌真机待验） |
 | S11（首次清单与按功能引导） | `b3678b8` | `:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL；`git diff --check` 通过；新增持久化与功能映射 JVM 测试 | 当时未验：无线调试离线，`adb mdns services` 为空 | 完成（真机待验） |
 | S12（首次引导两类申请） | `6f7a04e`、`1862259` | `:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL（227 tests / 0 failures）；`git diff --check` 通过；基础权限完成判定 JVM 测试 | vivo V2419A：基础权限全允许自动进首页；完全权限路径基础权限全拒绝后打开一个可选系统页，按一次返回进首页；两路径均写 `permission_intro_shown|1` | 完成（其它品牌待验） |
+| S13（复制年预算与统计自定义区间） | 本提交 | `:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL（47 套件 / 236 用例 / 0 失败）；`BudgetIncludeTest` 8 用例、`CustomStatsRangeTest` 5 用例；`git diff --check` 通过 | vivo V2419A：预算页弹二次确认后复制 2025→2026 两个来源月（`budget`/`cate_budget` 实证，已有目标月不覆盖）；统计页应用 `20261101–20261130` 汇总 93.70 / 20000.00 / 19906.30，窄区间 `20261101–20261102` 汇总 47.80，分类下钻随之变 2 笔，点周/月/年或重置恢复快捷周期；无效日期、倒序日期与空来源年均有错误提示 | 完成（其它品牌待验） |
 
 > **实测基线（2026-11-12 状态对账时补记）**：`origin/master` 上的 `:shared:jvmTest` = **139 tests / 0 failures**，`:app:assembleDebug` = **BUILD SUCCESSFUL**；环境 JDK 17.0.21 + Gradle 8.11.1（wrapper jar 方式，无 `gradlew` 脚本）。上表各切片的「96 / 100 / 113 / 116 / 118 tests」是当时提交记录里的历史数字，与最新基线口径不同，不要累加或当成当前值；本次对账未逐个重跑历史提交。三个先于状态对账 PR 合并的分支各自报告的测试数：PR #3 `fix/network-contract` 174 用例、PR #2 `fix/db-migration-v3` 145 用例、PR `fix/interaction-discipline` 新增 `AutoBatchConfirmTest` / `ClearLocalDataTest`（各分支独立口径，合并后以 CI 实测为准）。

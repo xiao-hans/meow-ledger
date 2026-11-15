@@ -46,6 +46,7 @@ import com.meow.ledger.shared.manage.FixedBillRepository
 import com.meow.ledger.shared.manage.PlanRepository
 import com.meow.ledger.shared.manage.TagRepository
 import com.meow.ledger.shared.manage.WidgetRepository
+import com.meow.ledger.shared.stats.StatsRange
 import com.meow.ledger.shared.stats.StatsRepository
 import com.meow.ledger.shared.stats.TagDrill
 import com.meow.ledger.shared.stats.TrendPeriod
@@ -146,6 +147,7 @@ private fun MainApp(
     var statsType by rememberSaveable { mutableStateOf(TYPE_EXPENSE) }
     var statsPeriod by rememberSaveable { mutableStateOf(TrendPeriod.MONTH) }
     var statsPage by rememberSaveable { mutableStateOf("") }
+    var statsCustomRange by rememberSaveable { mutableStateOf<StatsRange?>(null) }
     val auto = AutoRepository(AppGraph.database)
     // 这些状态镜像 user_setting，开机与「清空本机数据」后都从同一份快照取值。
     val initial = remember { settings.snapshot() }
@@ -328,16 +330,16 @@ private fun MainApp(
                     )
                     1 -> {
                         val stats = StatsRepository(AppGraph.database)
-                        val span = periodSpan(statsPeriod, 12)
+                        val span = statsCustomRange?.let { it.from to it.to } ?: periodSpan(statsPeriod, 12)
                         val names = categories.associate { it.id to it.title }
                         val month = today / 100
                         val year = today / 10000
                         if (statsPage.isNotEmpty()) {
                             val drill = TagDrill(AppGraph.database)
                             val inMonth = if (statsPage.startsWith("tag:")) {
-                                drill.billsOfTag(month * 100 + 1, month * 100 + 31, statsPage.substringAfter(':').toLongOrNull() ?: 0L, statsType)
+                                drill.billsOfTag(span.first, span.second, statsPage.substringAfter(':').toLongOrNull() ?: 0L, statsType)
                             } else {
-                                stats.billsOfPeriod(month * 100 + 1, month * 100 + 31, statsType)
+                                stats.billsOfPeriod(span.first, span.second, statsType)
                             }
                             StatsPages(
                                 page = statsPage,
@@ -357,15 +359,21 @@ private fun MainApp(
                         } else {
                             StatsHome(
                                 summary = stats.summary(span.first, span.second, statsType, { id -> names[id] ?: "未分类" }),
-                                trend = stats.trend(statsPeriod),
+                                trend = if (statsCustomRange == null) {
+                                    stats.trend(statsPeriod)
+                                } else {
+                                    stats.trendOfRange(span.first, span.second, statsPeriod)
+                                },
                                 type = statsType,
                                 period = statsPeriod,
                                 onType = { statsType = it },
-                                onPeriod = { statsPeriod = it },
+                                onPeriod = { statsPeriod = it; statsCustomRange = null },
                                 onOpenCate = { statsPage = "cate:$it" },
                                 onOpenTags = { statsPage = "tags" },
                                 onOpenType = { statsPage = "type" },
                                 onOpenReport = { statsPage = "report" },
+                                customRange = statsCustomRange,
+                                onCustomRange = { statsCustomRange = it },
                             )
                         }
                     }

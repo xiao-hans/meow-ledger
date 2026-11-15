@@ -48,6 +48,70 @@ class BudgetIncludeTest {
     }
 
     @Test
+    fun copyYearClonesEveryMonthAndCateRows() {
+        val (repo, db) = repo()
+        for (month in 1..12) {
+            val day = 2025 * 100L + month
+            repo.save(day, 100000L + month, remind = false, remindRate = 80)
+            repo.saveCategory(day, 9, 3000L + month)
+        }
+        assertEquals(12, repo.copyYear(2025, 2026))
+        for (month in 1..12) {
+            val source = 2025 * 100L + month
+            val target = 2026 * 100L + month
+            val copied = db.budgetQueries.selectOne(1, target).executeAsOneOrNull()!!
+            assertEquals(100000L + month, copied.money)
+            assertEquals(1, copied.is_copy)
+            assertEquals(3000L + month, db.budgetQueries.selectByMonth(1, target).executeAsList().first().money)
+            assertEquals(100000L + month, db.budgetQueries.selectOne(1, source).executeAsOneOrNull()!!.money)
+        }
+    }
+
+    @Test
+    fun copyYearSkipsExistingTargetMonthsAndEmptySourceMonths() {
+        val (repo, db) = repo()
+        repo.save(202501, 50000, remind = false, remindRate = 80)
+        repo.saveCategory(202501, 9, 10000)
+        repo.save(202503, 30000, remind = false, remindRate = 80)
+        repo.save(202601, 99999, remind = true, remindRate = 90)
+        repo.saveCategory(202601, 9, 77777)
+        assertEquals(1, repo.copyYear(2025, 2026))
+        assertEquals(99999, db.budgetQueries.selectOne(1, 202601).executeAsOneOrNull()!!.money)
+        assertEquals(77777, db.budgetQueries.selectByMonth(1, 202601).executeAsList().first().money)
+        assertEquals(30000, db.budgetQueries.selectOne(1, 202603).executeAsOneOrNull()!!.money)
+        assertNull(db.budgetQueries.selectOne(1, 202602).executeAsOneOrNull())
+    }
+
+    @Test
+    fun copyYearReplacesStaleTargetCateRows() {
+        val (repo, db) = repo()
+        repo.save(202505, 50000, remind = false, remindRate = 80)
+        repo.saveCategory(202505, 9, 10000)
+        db.budgetQueries.upsertCate(
+            com.meow.ledger.shared.db.Cate_budget(
+                book_id = 1,
+                day = 202605,
+                member_cate_id = 42,
+                money = 9999,
+                acf_money = 0,
+            ),
+        )
+        assertEquals(1, repo.copyYear(2025, 2026))
+        val cates = db.budgetQueries.selectByMonth(1, 202605).executeAsList()
+        assertEquals(1, cates.size)
+        assertEquals(9, cates.first().member_cate_id)
+        assertEquals(10000, cates.first().money)
+    }
+
+    @Test
+    fun copyYearWithoutSourceReturnsZero() {
+        val (repo, db) = repo()
+        assertEquals(0, repo.copyYear(2025, 2026))
+        assertEquals(0, db.budgetQueries.selectByMonth(1, 202612).executeAsList().size)
+        assertNull(db.budgetQueries.selectOne(1, 202612).executeAsOneOrNull())
+    }
+
+    @Test
     fun viewSplitsIncludedAndExcluded() {
         val (repo, db) = repo()
         val catRepo = com.meow.ledger.shared.bills.CategoryRepository(db)

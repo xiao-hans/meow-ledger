@@ -62,6 +62,35 @@ class StatsRepository(private val db: MeowDatabase) {
         return trendOf(bills, refundByBill(refunds), period, count)
     }
 
+    /** 自定义起止区间内的趋势。按 period 分桶，缺数据的桶补 0。 */
+    fun trendOfRange(fromDay: Long, toDay: Long, period: TrendPeriod, bookId: Long = 0): List<PeriodTotal> {
+        val bills = db.billQueries.selectByRange(bookId, fromDay, toDay).executeAsList()
+        val refunds = refundByBill(db.refundQueries.selectByRange(fromDay, toDay).executeAsList())
+        val totals = mutableMapOf<Int, PeriodTotal>()
+        for (bill in bills) {
+            if (bill.status != 0L) continue
+            val key = period.keyOf(bill.day) ?: continue
+            val current = totals[key] ?: PeriodTotal(key, 0L, 0L)
+            val money = netMoney(bill, refunds)
+            totals[key] = when (bill.type) {
+                TYPE_EXPENSE -> current.copy(expense = current.expense + money)
+                TYPE_INCOME -> current.copy(income = current.income + money)
+                else -> current
+            }
+        }
+        val first = period.keyOf(fromDay) ?: return emptyList()
+        val last = period.keyOf(toDay) ?: return emptyList()
+        val keys = mutableListOf<Int>()
+        var key = first
+        var guard = 0
+        while (key <= last && guard < 1200) {
+            keys.add(key)
+            key = period.shift(key, 1)
+            guard++
+        }
+        return keys.map { totals[it] ?: PeriodTotal(it, 0L, 0L) }
+    }
+
     /** 指定期间某类型的全部账单，按日期倒序。下钻页与标签页共用。 */
     fun billsOfPeriod(fromDay: Long, toDay: Long, type: Long, bookId: Long = 0): List<Bill> =
         db.billQueries.selectByRange(bookId, fromDay, toDay).executeAsList()
@@ -101,6 +130,39 @@ class StatsRepository(private val db: MeowDatabase) {
 
 /** 按月还是按年归组。 */
 enum class TrendPeriod { WEEK, MONTH, YEAR }
+
+/** 自定义区间解析结果：成功带起止日，失败带可显示的错误文案。 */
+sealed interface StatsRangeResult
+
+data class StatsRange(val from: Long, val to: Long) : StatsRangeResult
+
+data class StatsRangeError(val message: String) : StatsRangeResult
+
+/** 校验 yyyyMMdd 是否为真实日历日期。 */
+fun validStatsDay(day: Long): Boolean {
+    if (day < 19700101L || day > 29991231L) return false
+    val year = (day / 10000).toInt()
+    val month = (day / 100 % 100).toInt()
+    val date = (day % 100).toInt()
+    if (month !in 1..12 || date < 1) return false
+    val monthDays = intArrayOf(0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+    val maxDay = if (month == 2 && leap(year)) 29 else monthDays[month]
+    return date <= maxDay
+}
+
+/** 解析两个 8 位日期文本；空文本、非法日期、倒序区间都返回错误。 */
+fun parseStatsRange(fromText: String, toText: String): StatsRangeResult {
+    if (fromText.length != 8 || toText.length != 8 ||
+        fromText.any { !it.isDigit() } || toText.any { !it.isDigit() }
+    ) {
+        return StatsRangeError("日期必须是 8 位 yyyyMMdd")
+    }
+    val from = fromText.toLongOrNull() ?: return StatsRangeError("请输入有效日期")
+    val to = toText.toLongOrNull() ?: return StatsRangeError("请输入有效日期")
+    if (!validStatsDay(from) || !validStatsDay(to)) return StatsRangeError("请输入有效日期")
+    if (from > to) return StatsRangeError("结束日期必须大于或等于开始日期")
+    return StatsRange(from, to)
+}
 
 /** 退款按账单 client_id 归集。统计一律用净额，避免退款后支出被多记。 */
 internal fun refundByBill(refunds: List<Refund_bill>): Map<String, Long> {

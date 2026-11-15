@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -28,12 +29,14 @@ import com.meow.ledger.shared.manage.BudgetRepository
 import com.meow.ledger.shared.manage.BudgetView
 import com.meow.ledger.ui.auto.ActionButton
 import com.meow.ledger.ui.auto.BackHeader
+import com.meow.ledger.ui.theme.DangerConfirmDialog
 import com.meow.ledger.ui.theme.LocalPalette
 
 /** 预算。page 为 budget、budget-set，或 budget-edit:<categoryId>。 */
 @Composable
 fun BudgetPage(repo: BudgetRepository, month: Long, page: String, onOpen: (String) -> Unit, onBack: () -> Unit) {
-    val view = remember(page, month) { repo.view(month) }
+    var budgetRevision by remember { mutableIntStateOf(0) }
+    val view = remember(page, month, budgetRevision) { repo.view(month) }
     when {
         page == "budget-set" -> MonthBudgetEdit(repo, month, view.budget?.money ?: 0, view.budget?.is_remind == 1L, view.budget?.remind_rate ?: 80, onBack)
         page.startsWith("budget-edit") -> {
@@ -41,15 +44,24 @@ fun BudgetPage(repo: BudgetRepository, month: Long, page: String, onOpen: (Strin
             val category = view.categories.firstOrNull { it.categoryId == id }
             if (category == null) Missing("分类不存在", onBack) else CategoryBudgetEdit(repo, month, category.categoryId, category.title, category.money, onBack)
         }
-        else -> BudgetHome(repo, view, onOpen, onBack)
+        else -> BudgetHome(repo, view, onOpen, onBack) { budgetRevision++ }
     }
 }
 
 @Composable
-private fun BudgetHome(repo: BudgetRepository, view: BudgetView, onOpen: (String) -> Unit, onBack: () -> Unit) {
+private fun BudgetHome(
+    repo: BudgetRepository,
+    view: BudgetView,
+    onOpen: (String) -> Unit,
+    onBack: () -> Unit,
+    onDataChanged: () -> Unit,
+) {
     val palette = LocalPalette.current
     val budget = view.budget
     var notice by remember { mutableStateOf("") }
+    var confirmYearCopy by remember { mutableStateOf(false) }
+    val currentYear = (view.month / 100).toInt()
+    val fromYear = currentYear - 1
     Column(Modifier.fillMaxSize().background(palette.appBg)) {
         BackHeader("预算", onBack)
         if (notice.isNotEmpty()) {
@@ -90,10 +102,26 @@ private fun BudgetHome(repo: BudgetRepository, view: BudgetView, onOpen: (String
             if (budget == null) {
                 ActionButton("复制上月预算", true) {
                     notice = if (repo.copyPrevious(view.month) == null) "上月没有预算可复制" else "已复制上月预算"
+                    onDataChanged()
                 }
             }
             ActionButton("设置月预算", true) { onOpen("budget-set") }
+            ActionButton("复制年预算", true) { confirmYearCopy = true }
         }
+    }
+    if (confirmYearCopy) {
+        DangerConfirmDialog(
+            title = "复制年预算",
+            message = "从 $fromYear 年复制到 $currentYear 年，已设置预算的月份会跳过，不会覆盖。",
+            confirmLabel = "确认复制",
+            onConfirm = {
+                val count = repo.copyYear(fromYear, currentYear)
+                notice = if (count == 0) "来源年没有预算可复制" else "已复制 $count 个月预算"
+                confirmYearCopy = false
+                onDataChanged()
+            },
+            onDismiss = { confirmYearCopy = false },
+        )
     }
 }
 

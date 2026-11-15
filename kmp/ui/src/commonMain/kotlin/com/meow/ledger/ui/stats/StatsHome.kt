@@ -19,6 +19,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,9 +34,14 @@ import com.meow.ledger.shared.bills.TYPE_EXPENSE
 import com.meow.ledger.shared.bills.TYPE_INCOME
 import com.meow.ledger.shared.stats.PeriodTotal
 import com.meow.ledger.shared.stats.Summary
+import com.meow.ledger.shared.stats.StatsRange
+import com.meow.ledger.shared.stats.StatsRangeError
 import com.meow.ledger.shared.stats.TrendPeriod
+import com.meow.ledger.shared.stats.parseStatsRange
 import com.meow.ledger.ui.home.formatYuan
+import com.meow.ledger.ui.manage.Field
 import com.meow.ledger.ui.theme.GlassChip
+import com.meow.ledger.ui.auto.ActionButton
 import com.meow.ledger.ui.theme.LocalPalette
 import com.meow.ledger.ui.theme.glassCard
 
@@ -51,8 +61,13 @@ fun StatsHome(
     onOpenTags: () -> Unit = {},
     onOpenType: () -> Unit = {},
     onOpenReport: () -> Unit = {},
+    customRange: StatsRange? = null,
+    onCustomRange: (StatsRange?) -> Unit = {},
 ) {
     val palette = LocalPalette.current
+    var fromText by rememberSaveable { mutableStateOf(customRange?.from?.toString() ?: "") }
+    var toText by rememberSaveable { mutableStateOf(customRange?.to?.toString() ?: "") }
+    var rangeError by rememberSaveable { mutableStateOf("") }
     Column(
         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 120.dp),
     ) {
@@ -64,7 +79,43 @@ fun StatsHome(
             horizontalArrangement = Arrangement.spacedBy(9.dp),
         ) {
             TYPES.forEach { (label, value) -> Chip(label, value == type) { onType(value) } }
-            PERIODS.forEach { (label, value) -> Chip(label, value == period) { onPeriod(value) } }
+            PERIODS.forEach { (label, value) -> Chip(label, value == period) { onCustomRange(null); onPeriod(value) } }
+        }
+
+        Column(
+            Modifier
+                .padding(start = 18.dp, end = 18.dp, top = 12.dp)
+                .card()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                if (customRange == null) "自定义区间：未启用（当前按${period.name}快捷周期）" else "当前区间：${customRange.from} — ${customRange.to}",
+                color = palette.textPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Field("开始日期 yyyyMMdd", fromText, { fromText = it.filter { c -> c.isDigit() }.take(8) }, "例如 20261101")
+            Field("结束日期 yyyyMMdd", toText, { toText = it.filter { c -> c.isDigit() }.take(8) }, "例如 20261130")
+            if (rangeError.isNotEmpty()) Text(rangeError, color = palette.danger, fontSize = 12.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.weight(1f)) {
+                    ActionButton("应用", true) {
+                        when (val result = parseStatsRange(fromText, toText)) {
+                            is StatsRange -> { rangeError = ""; onCustomRange(result) }
+                            is StatsRangeError -> rangeError = result.message
+                        }
+                    }
+                }
+                Box(Modifier.weight(1f)) {
+                    ActionButton("重置", true) {
+                        fromText = ""
+                        toText = ""
+                        rangeError = ""
+                        onCustomRange(null)
+                    }
+                }
+            }
         }
 
         SummaryCard(summary, Modifier.padding(start = 18.dp, end = 18.dp, top = 12.dp))
@@ -163,7 +214,7 @@ private fun CategoryRow(name: String, cents: Long, pct: Int, type: Long, modifie
 private fun TrendChart(trend: List<PeriodTotal>, type: Long, modifier: Modifier) {
     val palette = LocalPalette.current
     val value: (PeriodTotal) -> Long = if (type == TYPE_INCOME) { it -> it.income } else { it -> it.expense }
-    val peak = trend.maxOf { value(it) }.coerceAtLeast(1L)
+    val peak = (trend.maxOfOrNull { value(it) } ?: 0L).coerceAtLeast(1L)
     val bar = if (type == TYPE_INCOME) palette.brand else palette.danger
     Row(
         modifier.fillMaxWidth().height(150.dp),

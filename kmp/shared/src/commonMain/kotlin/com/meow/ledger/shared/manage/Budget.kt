@@ -105,6 +105,23 @@ class BudgetRepository(private val db: MeowDatabase) {
         return db.budgetQueries.selectOne(bookId, yearMonth).executeAsOneOrNull()
     }
 
+    /** 复制整年预算到目标年。已有总预算的目标月跳过，返回成功复制的月份数。 */
+    fun copyYear(fromYear: Int, toYear: Int, bookId: Long = DEFAULT_BOOK_ID): Int {
+        var copied = 0
+        for (month in 1..12) {
+            val fromMonth = fromYear * 100L + month
+            val toMonth = toYear * 100L + month
+            val source = db.budgetQueries.selectOne(bookId, fromMonth).executeAsOneOrNull() ?: continue
+            if (db.budgetQueries.selectOne(bookId, toMonth).executeAsOneOrNull() != null) continue
+            val cates = db.budgetQueries.selectByMonth(bookId, fromMonth).executeAsList()
+            db.budgetQueries.deleteCatesOfMonth(bookId, toMonth)
+            db.budgetQueries.upsert(source.copy(day = toMonth, is_copy = 1))
+            cates.forEach { cate -> db.budgetQueries.upsertCate(cate.copy(day = toMonth)) }
+            copied++
+        }
+        return copied
+    }
+
     private fun spentByCategory(yearMonth: Long, bookId: Long): Map<Long, Long> {
         val from = yearMonth * 100 + 1
         val to = yearMonth * 100 + 31
