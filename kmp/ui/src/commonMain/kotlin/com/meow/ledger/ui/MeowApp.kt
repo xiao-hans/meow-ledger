@@ -540,15 +540,22 @@ private fun AutoPages(
             },
             onOpenPending = onOpenPending,
         )
-        "pending" -> PendingPage(
-            events = auto.pending(),
-            categories = categories,
-            imageCounts = auto.pending().associate { it.id to auto.imagesOf(it.id).size },
-            onBack = onBack,
-            onConfirmOne = { id, edit -> auto.pendingById(id)?.let { auto.confirm(it, edit = edit) } },
-            onBatchConfirm = { ids, edits -> auto.confirmAll(ids, edits) },
-            onBatchIgnore = { ids -> auto.ignoreAll(ids) },
-        )
+        "pending" -> {
+            val pending = auto.pending()
+            PendingPage(
+                events = pending,
+                categories = categories,
+                // 一次查完事件和图片，避免每条事件重复打库。
+                imageCounts = pending.associate { it.id to auto.imagesOf(it.id).size },
+                thumbPaths = pending.associate { e ->
+                    e.id to auto.imagesOf(e.id).map { img -> img.thumb_path.ifBlank { img.path } }
+                },
+                onBack = onBack,
+                onConfirmOne = { id, edit -> auto.pendingById(id)?.let { auto.confirm(it, edit = edit) } },
+                onBatchConfirm = { ids, edits -> auto.confirmAll(ids, edits) },
+                onBatchIgnore = { ids -> auto.ignoreAll(ids) },
+            )
+        }
         "rules" -> RulesPage(auto.rules(), onBack, onAdd = { keyword, type ->
             auto.saveRule(
                 Rule(

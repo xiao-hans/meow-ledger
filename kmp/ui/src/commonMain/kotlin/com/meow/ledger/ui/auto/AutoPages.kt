@@ -60,8 +60,10 @@ import com.meow.ledger.ui.theme.glassCard
 fun PendingPage(
     events: List<Auto_event>,
     categories: List<Category>,
-    /** eventId → 关联票据图数量；本切片只显示「有图 N」，不渲染位图。 */
+    /** eventId → 关联票据图数量。 */
     imageCounts: Map<String, Int> = emptyMap(),
+    /** eventId → 缩略图文件路径；有值就渲染位图，不只显示数量。 */
+    thumbPaths: Map<String, List<String>> = emptyMap(),
     onBack: () -> Unit,
     onConfirmOne: (String, PendingEdit?) -> Unit,
     onBatchConfirm: (Set<String>, Map<String, PendingEdit>) -> Unit,
@@ -132,6 +134,15 @@ fun PendingPage(
                 val imgCount = imageCounts[event.id] ?: 0
                 if (imgCount > 0) {
                     Text("有图 $imgCount", color = palette.brand, fontSize = 12.sp)
+                    val thumbs = thumbPaths[event.id].orEmpty().take(3)
+                    if (thumbs.isNotEmpty()) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.padding(top = 6.dp),
+                        ) {
+                            thumbs.forEach { path -> TicketThumb(path) }
+                        }
+                    }
                 }
                 if (edit != null) {
                     Text("已修改：${edit.desc.ifBlank { event.merchant }} · ${categoryName(categories, edit.memberCateId)}", color = palette.textSecondary, fontSize = 12.sp)
