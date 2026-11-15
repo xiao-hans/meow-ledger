@@ -1,0 +1,45 @@
+# 广告 SDK 黑名单（设计 §2 / AGENTS.md §11）。
+# 一行一个包名/坐标/文件名特征，checkAdDeps 任务对构建脚本与版本目录做不区分大小写的
+# 包含匹配，命中即构建失败。# 开头为注释。App 必须无广告。
+# 黑名单按 02-业务架构.md:130 实测的 SDK 矩阵维护；自有 ADX 走
+# la-ad-service.aiyouaiyou.cn 端点（无 gradle 坐标），由「不调用广告请求端点」约束覆盖。
+# ---- 穿山甲 / 字节 / GroMore ----
+com.pangle
+openadsdk
+bdxadsdk
+pangolin
+gromore
+# ---- 优量汇 GDT ----
+com.qq.e
+com.qq.gdt
+gdt_plugin
+gdtadv
+# ---- 快手联盟 ----
+com.kwad
+ksaddex
+ksad
+# ---- 百度 ----
+com.baidu.mobads
+# ---- 华为 HMS ----
+com.huawei.hms.ads
+hmsads
+# ---- 倍孜 / 章鱼 / 美数 / PTG / Byazt ----
+com.beizi
+beizi
+com.ptg
+meishu
+byazt
+# ---- TopOn / Sigmob / AdView ----
+anythink
+sigmob
+com.adview
+# ---- 常见海外 ADN ----
+admob
+play-services-ads
+adsense
+applovin
+ironsource
+com.inmobi
+com.mintegral
+com.mbridge
+com.unity3d.ads
