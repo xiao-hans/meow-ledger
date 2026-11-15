@@ -57,6 +57,25 @@ status: W1.1–W1.4 完成；下一切片 W2.1
 - [x] 测试：未知 kind 拒绝、Behavior/Add 入队、`remoteEnabled=false` 仍入队、feedback/token 放行；243 用例绿
 - [x] `:shared:jvmTest :app:assembleDebug checkAdDeps` 绿
 
+## W2.1 生物识别解锁 + 口令回退
+
+状态：完成（`a5b5e02`）。
+
+- [x] `EntryHost.biometricAvailable()` / `requestBiometricUnlock()`；API 28+ 平台 `BiometricPrompt`
+- [x] 取消 / 失败 / 无硬件回退四位口令；`LockGate` 保留「用指纹 / 面容解锁」按钮
+- [x] 设置页可选「指纹 / 面容 + 口令」或「仅口令」，默认允许
+- [x] `SettingsTest` 覆盖默认值与持久化；243 用例 + `assembleDebug` + `checkAdDeps` 绿
+
+## W2.2 七小组件种类 + 系统配置入口
+
+状态：完成（`a93fc2f`）。
+
+- [x] `WIDGET_KINDS` 扩到 7 种：本月收支 / 预算剩余 / 存钱进度 / 总资产 / 今日速记 / 存钱计划 / 待确认票据
+- [x] `WidgetConfigActivity` + `WidgetConfigScreen`：系统添加组件时选种类/尺寸，按 `appWidgetId` 绑定 `Widget_user`
+- [x] `AppWidgetReceiver` 按绑定种类渲染；`onDeleted` 清理绑定与本地行
+- [x] 计数类 `WidgetPreview.firstMoney/secondMoney=false`，不按金额格式化
+- [x] `WidgetConfigTest` 覆盖 7 种、绑定/重配/解绑、计数语义；246 用例 + `assembleDebug` + `checkAdDeps` 绿
+
 ## W2 / W3 / W4
 
 见 design §1–§5；本文件按切片追加验证记录与提交号。
@@ -67,5 +86,9 @@ status: W1.1–W1.4 完成；下一切片 W2.1
 |---|---|---|
 | W1.1 | `ca3d62e` | MigrationTest --rerun-tasks 绿 |
 | W1.2 | `6d353fe` | jvmTest + assembleDebug + checkAdDeps 绿 |
+| W1.3 | `1959120` | 239 用例 + assembleDebug + checkAdDeps 绿 |
+| W1.4 | `308d4ef` | 243 用例 + assembleDebug + checkAdDeps 绿 |
+| W2.1 | `a5b5e02` | 243 用例 + assembleDebug + checkAdDeps 绿 |
+| W2.2 | `a93fc2f` | 246 用例 + assembleDebug + checkAdDeps 绿 |
 | W1.3 | `1959120` | jvmTest 239 + assembleDebug + checkAdDeps 绿 |
 | W1.4 | `308d4ef` | jvmTest 243 + assembleDebug + checkAdDeps 绿 |

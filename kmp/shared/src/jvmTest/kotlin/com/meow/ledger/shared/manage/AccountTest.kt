@@ -17,6 +17,27 @@ class AccountTest {
     }
 
     @Test
+    fun loginGatewayCanBeSwappedForRealSms() {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        MeowDatabase.Schema.create(driver)
+        val db = MeowDatabase(driver)
+        val fake = object : LoginGateway {
+            override fun sendCode(phone: String): String? = "246810"
+            override fun verify(phone: String, code: String): Boolean = code == "246810"
+        }
+        val repo = AccountRepository(db, login = fake)
+        assertEquals("246810", repo.sendCode("13800000000"))
+        assertEquals("phone", repo.loginByPhone("13800000000", "246810")!!.login_type)
+        assertNull(repo.loginByPhone("13800000000", "111111"))
+    }
+
+    @Test
+    fun sandboxPushIsExplicitlyUnavailable() {
+        assertFalse(SandboxPushGateway.remote)
+        assertTrue(SandboxPushGateway.register().isFailure)
+    }
+
+    @Test
     fun loginNeedsARealCode() {
         val repo = repo()
         assertNull(repo.sendCode("123"))

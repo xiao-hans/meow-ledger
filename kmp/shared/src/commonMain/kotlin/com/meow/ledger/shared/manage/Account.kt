@@ -76,26 +76,22 @@ val REMOTE_SWITCHES = listOf(
 val REMOTE_DEFAULTS: Map<String, String> = REMOTE_SWITCHES.associate { it.key to it.default }
 
 /** 账号、导入记录、会员订单、合约与反馈。`sync` 可选：非 null 时埋点会入 Behavior/Add 队列。 */
-class AccountRepository(private val db: MeowDatabase, private val sync: SyncEngine? = null) {
+class AccountRepository(
+    private val db: MeowDatabase,
+    private val sync: SyncEngine? = null,
+    private val login: LoginGateway = SandboxLoginGateway(db),
+) {
 
     fun profile(): Member_profile =
         db.accountQueries.selectProfile(PROFILE_ID).executeAsOneOrNull()
             ?: Member_profile(PROFILE_ID, "本地用户", "", "", "", "", 0, 0)
 
     /** 手机号必须是 1 开头的 11 位。验证码留在本机并随结果返回。 */
-    fun sendCode(phone: String): String? {
-        if (!phone.matches(Regex("^1\\d{10}$"))) return null
-        val code = Random.nextInt(100000, 999999).toString()
-        db.accountQueries.upsertCode(
-            com.meow.ledger.shared.db.Sms_code(phone, code, currentTimeMillis() + 300_000),
-        )
-        return code
-    }
+    fun sendCode(phone: String): String? = login.sendCode(phone)
 
     /** 验证码不对时返回 null，对了就写入登录态。 */
     fun loginByPhone(phone: String, code: String): Member_profile? {
-        val stored = db.accountQueries.selectCode(phone).executeAsOneOrNull()
-        if (stored == null || stored.code != code || stored.expires < currentTimeMillis()) return null
+        if (!login.verify(phone, code)) return null
         return save(profile().copy(phone = phone, login_type = "phone", bind_type = "phone", bind_id = phone))
     }
 
@@ -142,10 +138,7 @@ class AccountRepository(private val db: MeowDatabase, private val sync: SyncEngi
         return migration().copy(already = already)
     }
 
-    private fun codeMatches(phone: String, code: String): Boolean {
-        val stored = db.accountQueries.selectCode(phone).executeAsOneOrNull() ?: return false
-        return stored.code == code && stored.expires >= currentTimeMillis()
-    }
+    private fun codeMatches(phone: String, code: String): Boolean = login.verify(phone, code)
 
     private fun save(row: Member_profile): Member_profile {
         db.accountQueries.upsertProfile(row)
