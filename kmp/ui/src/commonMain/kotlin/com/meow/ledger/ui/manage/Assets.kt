@@ -22,15 +22,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.meow.ledger.shared.bills.BillsRepository
+import com.meow.ledger.shared.bills.TYPE_TRANSFER
 import com.meow.ledger.shared.bills.centsToYuan
 import com.meow.ledger.shared.bills.toCents
+import com.meow.ledger.shared.db.Bill
 import com.meow.ledger.shared.manage.AssetRepository
 import com.meow.ledger.shared.manage.DEFAULT_ASSET_ID
+import com.meow.ledger.ui.AppGraph
 import com.meow.ledger.ui.auto.ActionButton
 import com.meow.ledger.ui.auto.BackHeader
 import com.meow.ledger.ui.theme.LocalPalette
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
-/** 资产页：assets / asset-new / asset-edit:<id> / asset-hidden。 */
+/** 资产页：assets / asset-new / asset-edit:<id> / asset-flow:<id> / asset-hidden / asset-transfer。 */
 @Composable
 fun AssetsPage(repository: AssetRepository, page: String, onOpen: (String) -> Unit, onBack: () -> Unit) {
     var notice by remember { mutableStateOf("") }
@@ -44,6 +51,7 @@ fun AssetsPage(repository: AssetRepository, page: String, onOpen: (String) -> Un
             page.startsWith("asset-edit:") -> AssetForm(repository, page.substringAfter(":").toLongOrNull(), onBack) { notice = it }
             page.startsWith("asset-flow:") -> AssetFlow(repository, page.substringAfter(":").toLongOrNull(), onBack)
             page == "asset-hidden" -> HiddenAssets(repository, onBack) { notice = it }
+            page == "asset-transfer" -> TransferPage(repository, onOpen, onBack) { notice = it }
         }
         if (notice.isNotEmpty()) Text(notice, color = LocalPalette.current.danger, modifier = Modifier.padding(top = 12.dp))
     }
@@ -63,6 +71,7 @@ private fun AssetList(repository: AssetRepository, onOpen: (String) -> Unit, onB
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ChoiceChip("新增账户", true) { onOpen("asset-new") }
+        ChoiceChip("调拨", false) { onOpen("asset-transfer") }
         ChoiceChip("已隐藏", false) { onOpen("asset-hidden") }
     }
     if (assets.isEmpty()) Empty("没有可见账户", "新增一个，或到已隐藏里恢复", "新增账户") { onOpen("asset-new") }
@@ -204,5 +213,123 @@ private fun AssetFlow(repository: AssetRepository, id: Long?, onBack: () -> Unit
                 }
             }
         }
+    }
+}
+
+/** 账户间调拨：写 TYPE_TRANSFER=3，复用 saveWithBalance；不新建表。 */
+@Composable
+private fun TransferPage(
+    repository: AssetRepository,
+    onOpen: (String) -> Unit,
+    onBack: () -> Unit,
+    onNotice: (String) -> Unit,
+) {
+    val palette = LocalPalette.current
+    val assets = remember { repository.visible() }
+    var fromId by remember { mutableStateOf(assets.firstOrNull()?.id) }
+    var toId by remember { mutableStateOf(assets.drop(1).firstOrNull()?.id ?: assets.firstOrNull()?.id) }
+    var money by remember { mutableStateOf("") }
+    var desc by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf(false) }
+
+    BackHeader("调拨", onBack)
+    if (assets.isEmpty()) {
+        Empty("没有可用账户", "先新建一个资产账户", "去新建", { onOpen("asset-new") })
+        return
+    }
+    if (assets.size < 2) {
+        Empty("至少需要两个账户", "再建一个账户才能调拨", "去新建", { onOpen("asset-new") })
+        return
+    }
+
+    Text("转出账户", color = palette.textSecondary, fontSize = 12.sp)
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        assets.forEach { asset ->
+            ChoiceChip(
+                "${asset.name} ${centsToYuan(asset.balance_cents)}",
+                fromId == asset.id,
+            ) { fromId = asset.id }
+        }
+    }
+    Text("转入账户", color = palette.textSecondary, fontSize = 12.sp)
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        assets.forEach { asset ->
+            ChoiceChip(
+                "${asset.name} ${centsToYuan(asset.balance_cents)}",
+                toId == asset.id,
+            ) { toId = asset.id }
+        }
+    }
+    Field("金额（元）", money, { money = it }, "例如 100.00")
+    Field("备注（可选）", desc, { desc = it }, "例如 转存")
+
+    if (!confirm) {
+        ActionButton("确认调拨", true) {
+            val cents = toCents(money)
+            when {
+                fromId == null || toId == null -> onNotice("请选择转出和转入账户")
+                fromId == toId -> onNotice("转出和转入不能是同一账户")
+                cents == null || cents <= 0L -> onNotice("请输入大于 0 的金额")
+                else -> {
+                    onNotice("")
+                    confirm = true
+                }
+            }
+        }
+    } else {
+        val fromName = assets.firstOrNull { it.id == fromId }?.name ?: "?"
+        val toName = assets.firstOrNull { it.id == toId }?.name ?: "?"
+        ConfirmBar(
+            text = "将从「$fromName」转 ${money.trim()} 元到「$toName」，确认后立即改余额。",
+            onCancel = { confirm = false },
+            onConfirm = {
+                val cents = toCents(money)
+                val from = fromId
+                val to = toId
+                if (from == null || to == null || from == to || cents == null || cents <= 0L) {
+                    onNotice("调拨参数无效")
+                    confirm = false
+                    return@ConfirmBar
+                }
+                val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+                val today = (now.year * 10000 + now.monthNumber * 100 + now.dayOfMonth).toLong()
+                val bill = Bill(
+                    member_id = 0,
+                    client_id = "transfer-$today-${kotlin.random.Random.nextLong()}",
+                    money = cents,
+                    refund_money = 0,
+                    type = TYPE_TRANSFER,
+                    exchange = 0,
+                    book_id = 1,
+                    member_cate_id = 0,
+                    currency = "CNY",
+                    day = today,
+                    desc = desc.trim().ifBlank { "调拨" },
+                    not_in_budget = 0,
+                    images = "",
+                    update_date = today,
+                    create_date = today,
+                    status = 0,
+                    to_assets_id = to,
+                    from_assets_id = from,
+                    interest = 0,
+                    interest_reckon_type = 0,
+                    tag_ids = "",
+                    source = 0,
+                    import_id = 0L,
+                    repayment_day = 0,
+                    local_create_time = today,
+                    local_update_time = today,
+                    installment_plan_id = "",
+                    installment_num = 0,
+                    installment_money = 0,
+                    installment_interest = 0,
+                )
+                BillsRepository(AppGraph.database, AppGraph.sync).saveWithBalance(bill)
+                onNotice("已调拨 ${money.trim()} 元")
+                onBack()
+            },
+            confirmLabel = "确认调拨",
+        )
     }
 }
