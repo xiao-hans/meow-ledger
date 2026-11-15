@@ -159,6 +159,18 @@ ad_free: 不接入广告 SDK，不调用广告请求端点
 
 完成依据：权限门不再包含申请不到的高敏权限；不同品牌至少有可操作入口或明确不支持原因；完整授权刷新与通知监听/无障碍/截屏链路仍需各品牌真机。
 
+## S11 · 首次权限清单与按功能引导
+
+状态：代码、JVM 测试与构建完成；vivo 真机因无线调试离线未验（见下方提交记录）。
+
+1. 权限清单按「功能 → 可选权限」展示；每项可在清单里单独申请，也可跳过。
+2. 首次冷启动只自动弹一次：看到清单即写 `permission_intro_shown`；清空本地数据后不重弹。
+3. 用户进入自动记账、通知/无障碍采集、截屏 OCR、周期提醒、后台保活、应用锁等功能时，才按 `permissionKeysForFeature` 检查缺项并弹上下文引导；「以后再说」只跳过本次会话，可稍后从「我的 → 权限与隐私」再次打开。
+4. 基础权限申请可跳过，权限项不阻塞手工记账；所有系统设置项仍走 S10 的品牌兼容与逐层兜底。
+5. 验证：`:shared:jvmTest` 中 `permissionIntroIsStoredAndFeaturePermissionsAreMapped` 覆盖持久化与 7 组功能映射；`:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL；`git diff --check` 通过。
+
+完成依据：首次清单不复弹、清单内可逐项申请、后续按功能再引导、可从设置主动打开；各品牌真机授权链路仍待设备。
+
 ## 每个切片的提交记录
 
 | 切片 | 提交号 | 构建结果 | 真机结果 | 差距表状态 |
@@ -174,5 +186,6 @@ ad_free: 不接入广告 SDK，不调用广告请求端点
 | S8 | `2a8c806` | 118 tests 0 fail；埋点三类落库 E2E（ac_add_bill×2 入库实证） | 模拟器记账保存+埋点；imePadding 键盘遮挡修复后回归截图 | 完成 |
 | S9（免费解锁与数据迁移） | 本提交 | `:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL；`git diff --check` 通过；BackupTest/SampleCsvTest 覆盖全库备份与样本 CSV | vivo V2419A 真机：Mine 显示「全部功能已解锁」，备份页导出 JSON 成功（含 4 笔账与分类）、无红色失败提示 | 完成（恢复/文件选择待人工） |
 | S10（权限申请与跨品牌适配） | 本提交 | `:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL；`git diff --check` 通过 | vivo V2419A 真机：冷启动权限门文案/去设置按钮/不支持原因/已开启状态截图，启动无 FATAL | 完成（其它品牌真机待验） |
+| S11（首次清单与按功能引导） | 本提交 | `:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL；`git diff --check` 通过；新增持久化与功能映射 JVM 测试 | 未验：无线调试离线，`adb mdns services` 为空；待机主重新开启无线调试后补冷启动、二次启动、主动打开与功能引导截图 | 完成（真机待验） |
 
 > **实测基线（2026-11-12 状态对账时补记）**：`origin/master` 上的 `:shared:jvmTest` = **139 tests / 0 failures**，`:app:assembleDebug` = **BUILD SUCCESSFUL**；环境 JDK 17.0.21 + Gradle 8.11.1（wrapper jar 方式，无 `gradlew` 脚本）。上表各切片的「96 / 100 / 113 / 116 / 118 tests」是当时提交记录里的历史数字，与最新基线口径不同，不要累加或当成当前值；本次对账未逐个重跑历史提交。三个先于状态对账 PR 合并的分支各自报告的测试数：PR #3 `fix/network-contract` 174 用例、PR #2 `fix/db-migration-v3` 145 用例、PR `fix/interaction-discipline` 新增 `AutoBatchConfirmTest` / `ClearLocalDataTest`（各分支独立口径，合并后以 CI 实测为准）。

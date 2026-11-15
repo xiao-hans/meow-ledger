@@ -21,9 +21,11 @@ import com.meow.ledger.shared.auto.CaptureResult
 import com.meow.ledger.shared.auto.DeepLinkTarget
 import com.meow.ledger.shared.auto.KEY_AUTO_BILL
 import com.meow.ledger.shared.auto.KEY_KEEP_ALIVE
+import com.meow.ledger.shared.auto.KEY_PERMISSION_INTRO_SHOWN
 import com.meow.ledger.shared.auto.SOURCE_OCR
 import com.meow.ledger.shared.auto.SettingsStore
 import com.meow.ledger.shared.auto.paymentStatusOf
+import com.meow.ledger.shared.auto.permissionKeysForFeature
 import com.meow.ledger.shared.auto.snapshot
 import com.meow.ledger.shared.bills.BillsRepository
 import com.meow.ledger.shared.bills.CategoryRepository
@@ -173,6 +175,17 @@ private fun MainApp(
     }
     var captureSource by rememberSaveable { mutableStateOf("") }
     var captureMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    // 上下文引导不持久化「跳过」：本次会话里同一功能不重复弹，下次启动仍可提醒。
+    var permissionFeature by remember { mutableStateOf("") }
+    val skippedPermissionFeatures = remember { mutableSetOf<String>() }
+
+    /** 只在该功能真有缺失且本机支持的权限时提醒；手工记账永不经过这里。 */
+    fun ensureFeaturePermissions(feature: String) {
+        if (feature in skippedPermissionFeatures) return
+        val items = AppGraph.permissionHost?.permissions() ?: return
+        val keys = permissionKeysForFeature(feature)
+        if (items.any { it.key in keys && !it.granted && it.actionable }) permissionFeature = feature
+    }
     // 外部支付回调不再进入付费功能；只作为一条普通提示展示。
     var paymentNotice by rememberSaveable {
         mutableStateOf(
@@ -194,6 +207,8 @@ private fun MainApp(
         val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
         val today = (now.year * 10000 + now.monthNumber * 100 + now.dayOfMonth).toLong()
         clearLocalData(AppGraph.database, today)
+        // 清库会删掉 user_setting；刚清完不应又弹首次引导，但下次安装/卸载数据后仍按首次处理。
+        settings.setFlag(KEY_PERMISSION_INTRO_SHOWN, true)
         val fresh = settings.snapshot()
         onTheme(fresh.theme)
         autoEnabled = fresh.autoBill
@@ -379,16 +394,22 @@ private fun MainApp(
                             onToggle = { on ->
                                 autoEnabled = on
                                 settings.setFlag(KEY_AUTO_BILL, on)
+                                if (on) ensureFeaturePermissions("auto_capture")
                                 if (on && watchApps.isEmpty()) autoPage = "guide"
                             },
-                            onCapture = { source -> captureSource = source; captureMessage = null; autoPage = "capture" },
-                            onOcr = { autoPage = "ocr" },
+                            onCapture = { source ->
+                                captureSource = source
+                                captureMessage = null
+                                autoPage = "capture"
+                                ensureFeaturePermissions("capture")
+                            },
+                            onOcr = { autoPage = "ocr"; ensureFeaturePermissions("ocr") },
                             onPending = { autoPage = "pending" },
                             onRules = { autoPage = "rules" },
                             onApps = { autoPage = "apps" },
-                            onKeepAlive = { autoPage = "keepalive" },
-                            onGuide = { autoPage = "guide" },
-                            onSettings = { autoPage = "settings" },
+                            onKeepAlive = { autoPage = "keepalive"; ensureFeaturePermissions("keep_alive") },
+                            onGuide = { autoPage = "guide"; ensureFeaturePermissions("auto_capture") },
+                            onSettings = { autoPage = "settings"; ensureFeaturePermissions("auto_capture") },
                         )
                     }
                     else -> if (minePage.isNotEmpty()) {
@@ -412,6 +433,16 @@ private fun MainApp(
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp),
                 )
             }
+        }
+        if (permissionFeature.isNotEmpty()) {
+            ContextPermissionDialog(
+                feature = permissionFeature,
+                items = AppGraph.permissionHost?.permissions().orEmpty(),
+                onDismiss = {
+                    skippedPermissionFeatures += permissionFeature
+                    permissionFeature = ""
+                },
+            )
         }
     }
 }
@@ -553,6 +584,7 @@ private fun MinePages(
         page.startsWith("installment") || page.startsWith("save-plan") -> PlansPage(PlanRepository(database), page, onOpen, onBack)
         page.startsWith("widget") -> WidgetsPage(WidgetRepository(database), month, page, onOpen, onBack)
         page == "help" -> HelpPage(onBack)
+        page == "permissions" -> PermissionSettingsPage(onBack)
         else -> AccountPage(
             page,
             database,

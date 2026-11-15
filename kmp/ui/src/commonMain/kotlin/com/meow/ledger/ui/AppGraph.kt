@@ -17,4 +17,7 @@ object AppGraph {
 
     /** 真实 API（KtorMeowApi）；供后续需要直接发请求的页面/仓储使用。 */
     var api: MeowApi? = null
+
+    /** 平台权限入口；app 启动时注入，供「我的」与功能页按需查询/申请。 */
+    var permissionHost: EntryHost? = null
 }

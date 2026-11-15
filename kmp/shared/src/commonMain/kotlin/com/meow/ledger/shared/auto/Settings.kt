@@ -39,6 +39,21 @@ const val KEY_SYNC_CONFIG_BASE_URL = "sync_config_base_url"
 /** 真实服务端签发的登录令牌；空表示未登录，不发 `Authorization`。 */
 const val KEY_AUTH_TOKEN = "auth_token"
 
+/** 首次权限引导是否已展示。之后只在用户进入对应功能或主动打开清单时再提醒。 */
+const val KEY_PERMISSION_INTRO_SHOWN = "permission_intro_shown"
+
+/** 功能 → 该功能的 Android 权限 key。这里用字面值，避免 shared 反向依赖 app 模块。 */
+fun permissionKeysForFeature(feature: String): Set<String> = when (feature) {
+    "auto_capture" -> setOf("notification_listener", "accessibility", "usage_stats", "battery")
+    "capture" -> setOf("notification_listener", "accessibility")
+    "ocr" -> setOf("media_images", "camera")
+    "reminder" -> setOf("notification", "exact_alarm")
+    "keep_alive" -> setOf("battery")
+    "lock" -> setOf("biometric")
+    "overlay" -> setOf("overlay")
+    else -> emptySet()
+}
+
 /**
  * 用户设置的读写，落在 `user_setting` 表上。
  * 每个开关都有明确的默认值，从来没存过和存成关闭不是一回事。

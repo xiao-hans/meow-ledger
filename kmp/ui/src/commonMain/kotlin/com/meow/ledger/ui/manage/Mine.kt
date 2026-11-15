@@ -60,6 +60,7 @@ private val entries = listOf(
     Triple("change-phone", "换绑手机", "旧号和新号都要验证"),
     Triple("migration", "老用户数据迁移", "标记本机旧版账本，不删除账单"),
     Triple("feedback", "反馈", "问题和联系方式"),
+    Triple("permissions", "权限与隐私", "按功能查看与开启可选权限"),
     Triple("lock", "应用锁", "四位口令"),
     Triple("help", "帮助与协议", "使用说明和关于"),
     Triple("push", "消息推送", "本机提醒，不接收厂商推送"),

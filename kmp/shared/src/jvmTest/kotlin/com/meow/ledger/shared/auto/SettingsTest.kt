@@ -45,6 +45,22 @@ class SettingsTest {
     }
 
     @Test
+    fun permissionIntroIsStoredAndFeaturePermissionsAreMapped() {
+        val store = store()
+        assertFalse(store.flag(KEY_PERMISSION_INTRO_SHOWN, false))
+        store.setFlag(KEY_PERMISSION_INTRO_SHOWN, true)
+        assertTrue(store.flag(KEY_PERMISSION_INTRO_SHOWN, false))
+        assertEquals(
+            setOf("notification_listener", "accessibility", "usage_stats", "battery"),
+            permissionKeysForFeature("auto_capture"),
+        )
+        assertEquals(setOf("media_images", "camera"), permissionKeysForFeature("ocr"))
+        assertEquals(setOf("notification", "exact_alarm"), permissionKeysForFeature("reminder"))
+        assertEquals(setOf("battery"), permissionKeysForFeature("keep_alive"))
+        assertEquals(emptySet(), permissionKeysForFeature("manual_bill"))
+    }
+
+    @Test
     fun snapshotReflectsStoredUiState() {
         val store = store()
         // 空库：全部落到缺省值。

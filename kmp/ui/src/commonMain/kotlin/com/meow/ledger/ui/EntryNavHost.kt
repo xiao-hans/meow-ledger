@@ -12,14 +12,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +33,7 @@ import com.meow.ledger.shared.auto.DeepLinkTarget
 import com.meow.ledger.shared.auto.DEFAULT_WEBVIEW_URL
 import com.meow.ledger.shared.auto.THEME_SYSTEM
 import com.meow.ledger.shared.auto.isAllowedWebViewUrl
+import com.meow.ledger.shared.auto.permissionKeysForFeature
 import com.meow.ledger.ui.theme.LocalPalette
 import com.meow.ledger.ui.theme.glassCard
 import com.meow.ledger.ui.theme.MeowTheme
@@ -41,6 +44,14 @@ interface EntryHost {
     fun permissions(): List<PermissionItem>
 
     fun requestPermissions()
+
+    /** 只申请/打开清单中的一项；每项都是可选的。 */
+    fun requestPermission(key: String)
+
+    /** 首次权限引导是否已展示；由平台侧持久化，清库后仍按新首次处理。 */
+    fun permissionIntroSeen(): Boolean
+
+    fun markPermissionIntroSeen()
 
     /** 逐项跳转；实现方每次只启动一个系统设置页，避免连续覆盖。 */
     fun openSettings(key: String)
@@ -95,12 +106,20 @@ fun EntryNavHost(
 ) {
     // 入口页与主界面共用同一套三态主题（跟随系统 / 浅色 / 深色），避免手动切主题后配色错乱（§6.8）。
     val palette = paletteOf(theme)
-    var permissionChecked by rememberSaveable { mutableStateOf(false) }
-    var banner by rememberSaveable { mutableStateOf("") }
+    // 首次引导只自动弹一次；之后从「我的 → 权限与隐私」或对应功能按需打开。
+    var introDismissed by remember { mutableStateOf(host?.permissionIntroSeen() == true) }
+    var banner by remember { mutableStateOf("") }
     // 系统动作（打开浏览器/扫码/拉起截屏）只在同一个深链上执行一次；
     // launchId 让重复的磁贴点击也能重新触发，旋转屏幕则不会反复拉起外部 Activity。
-    var handledKey by rememberSaveable { mutableStateOf("") }
+    var handledKey by remember { mutableStateOf("") }
     val key = with(initialTarget) { "$kind|$clientId|$url|$paymentResult|$launchId" }
+
+    // 看到首次清单就记账：即使强杀进程或跳过申请，下次启动也不再自动弹。
+    LaunchedEffect(host, introDismissed, initialTarget.kind) {
+        if (host != null && !introDismissed && initialTarget.kind == DeepLinkTarget.Kind.MAIN) {
+            host.markPermissionIntroSeen()
+        }
+    }
 
     LaunchedEffect(key) {
         if (key == handledKey || host == null) return@LaunchedEffect
@@ -128,19 +147,17 @@ fun EntryNavHost(
                 .background(palette.appBg)
                 .statusBarsPadding(),
         ) {
-            // 冷启动（MAIN）或明确请求权限页时先走一次权限引导；深链直达功能不被打断。
-            val needsGate = initialTarget.kind == DeepLinkTarget.Kind.MAIN ||
-                initialTarget.kind == DeepLinkTarget.Kind.PERMISSION
-            if (host != null && !permissionChecked && needsGate) {
+            // 只有第一次冷启动自动展示清单；深链直达功能和再次冷启动都不打断。
+            val firstLaunch = initialTarget.kind == DeepLinkTarget.Kind.MAIN
+            if (host != null && !introDismissed && firstLaunch) {
                 PermissionGate(
                     items = host.permissions(),
-                    onRequest = {
-                        host.requestPermissions()
-                        permissionChecked = true
+                    onRequest = host::requestPermissions,
+                    onOpenItem = host::requestPermission,
+                    onContinue = {
+                        host.markPermissionIntroSeen()
+                        introDismissed = true
                     },
-                    onContinue = { permissionChecked = true },
-                    onGuidedSettings = host::startGuidedSettings,
-                    onOpenSettings = host::openSettings,
                 )
             } else {
                 content(initialTarget)
@@ -175,13 +192,125 @@ private fun StatusBanner(message: String, modifier: Modifier = Modifier, onDismi
     }
 }
 
+/**
+ * 按功能列权限的清单。首次引导、我的页和上下文引导共用同一套 UI；
+ * 每项都是可选、可单独申请，也不会把用户一次性送去多个系统设置页。
+ */
+@Composable
+fun PermissionChecklist(
+    items: List<PermissionItem>,
+    onOpen: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    items.forEach { item ->
+        Row(
+            modifier
+                .fillMaxWidth()
+                .glassCard(elevation = 2.dp)
+                .padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(item.label, color = LocalPalette.current.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(item.purpose, color = LocalPalette.current.textSecondary, fontSize = 12.sp)
+                Text(
+                    if (item.granted) "已开启" else if (!item.actionable) "本机不支持" else "未开启 · 可稍后开启",
+                    color = if (item.granted || !item.actionable) LocalPalette.current.textSecondary else LocalPalette.current.danger,
+                    fontSize = 12.sp,
+                )
+                if (!item.granted && item.hint.isNotEmpty()) {
+                    Text(item.hint, color = LocalPalette.current.textSecondary, fontSize = 11.sp)
+                }
+            }
+            if (!item.granted && item.actionable && item.canOpenSettings) {
+                Text(
+                    "去开启",
+                    color = LocalPalette.current.brand,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable { onOpen(item.key) },
+                )
+            }
+        }
+    }
+}
+
+/** 我的 → 权限与隐私：随时可回来看清单，并只申请自己需要的那一项。 */
+@Composable
+fun PermissionSettingsPage(onBack: () -> Unit) {
+    val palette = LocalPalette.current
+    val host = AppGraph.permissionHost
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("< 返回", color = palette.brand, modifier = Modifier.clickable(onClick = onBack))
+        Text("权限与隐私", color = palette.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(
+            "每项权限对应一个功能，全部可选。可以现在开启，也可以以后用到该功能时再开启；不开启不影响手工记账和全部免费功能。",
+            color = palette.textSecondary,
+            fontSize = 13.sp,
+        )
+        if (host == null) {
+            Text("当前预览没有系统权限入口。", color = palette.textSecondary, fontSize = 13.sp)
+        } else {
+            PermissionChecklist(host.permissions(), host::requestPermission)
+        }
+    }
+}
+
+/**
+ * 使用功能时的上下文引导：只列该功能缺的、本机支持的可选权限。
+ * 「以后再说」只抑制本次会话，不永久剥夺下次提醒。
+ */
+@Composable
+fun ContextPermissionDialog(
+    feature: String,
+    items: List<PermissionItem>,
+    onDismiss: () -> Unit,
+) {
+    val palette = LocalPalette.current
+    val keys = permissionKeysForFeature(feature)
+    val missing = items.filter { it.key in keys && !it.granted && it.actionable }
+    if (missing.isEmpty()) return
+    val host = AppGraph.permissionHost
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = palette.cardBg,
+        title = { Text("这个功能可按需开启权限", color = palette.textPrimary) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("以下权限都可选；不开启仍可继续使用，之后可在「我的 → 权限与隐私」打开。", color = palette.textSecondary)
+                missing.forEach { item ->
+                    Text("${item.label}：${item.purpose}", color = palette.textPrimary, fontSize = 13.sp)
+                    if (item.hint.isNotEmpty()) Text(item.hint, color = palette.textSecondary, fontSize = 11.sp)
+                }
+            }
+        },
+        confirmButton = {
+            if (host != null) {
+                TextButton(onClick = {
+                    missing.firstOrNull()?.let { host.requestPermission(it.key) }
+                    onDismiss()
+                }) { Text("去开启", color = palette.brand) }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("以后再说", color = palette.textSecondary) }
+        },
+    )
+}
+
 @Composable
 private fun PermissionGate(
     items: List<PermissionItem>,
     onRequest: () -> Unit,
+    onOpenItem: (String) -> Unit,
     onContinue: () -> Unit,
-    onGuidedSettings: () -> Unit,
-    onOpenSettings: (String) -> Unit,
 ) {
     val palette = LocalPalette.current
     Column(
@@ -193,55 +322,16 @@ private fun PermissionGate(
     ) {
         Text("进入账本前", color = palette.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Text(
-            "常用权限集中申请；系统专属权限逐项去设置。拒绝后仍可手工记账，不支持的项会写清原因。",
+            "下面按功能列出所有权限，全部可选：可以现在逐项开启，也可以以后用到对应功能时再开启。拒绝不影响手工记账，本机不支持的项会写清原因。",
             color = palette.textSecondary,
             fontSize = 13.sp,
         )
-        items.forEach { item ->
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .glassCard(elevation = 2.dp)
-                    .padding(14.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(item.label, color = palette.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    Text(item.purpose, color = palette.textSecondary, fontSize = 12.sp)
-                    Text(
-                        if (item.granted) "已开启" else if (!item.actionable) "本机不支持" else "未开启",
-                        color = if (item.granted) palette.textSecondary else if (item.actionable) palette.danger else palette.textSecondary,
-                        fontSize = 12.sp,
-                    )
-                    if (!item.granted && item.hint.isNotEmpty()) {
-                        Text(item.hint, color = palette.textSecondary, fontSize = 11.sp)
-                    }
-                }
-                if (!item.granted && item.actionable && item.canOpenSettings) {
-                    Text(
-                        "去设置",
-                        color = palette.brand,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clickable { onOpenSettings(item.key) },
-                    )
-                }
-            }
-        }
+        PermissionChecklist(items, onOpenItem)
         Button(
             onClick = onRequest,
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = palette.brand, contentColor = palette.cardBg),
-        ) { Text("申请常用权限") }
-        Button(
-            onClick = {
-                onRequest()
-                onGuidedSettings()
-            },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = palette.chipFill, contentColor = palette.textPrimary),
-        ) { Text("逐项去设置") }
+        ) { Text("申请基础权限（可跳过）") }
         Button(
             onClick = onContinue,
             modifier = Modifier.fillMaxWidth(),

@@ -15,9 +15,12 @@ import com.meow.ledger.platform.ScreenCaptureActivity
 import com.meow.ledger.platform.ScreenCaptureTileService
 import com.meow.ledger.shared.auto.DEFAULT_WEBVIEW_URL
 import com.meow.ledger.shared.auto.DeepLinkTarget
+import com.meow.ledger.shared.auto.KEY_PERMISSION_INTRO_SHOWN
+import com.meow.ledger.shared.auto.SettingsStore
 import com.meow.ledger.shared.auto.isAllowedWebViewUrl
 import com.meow.ledger.shared.auto.parseDeepLink
 import com.meow.ledger.shared.auto.parseExplicitRoute
+import com.meow.ledger.ui.AppGraph
 import com.meow.ledger.ui.EntryHost
 import com.meow.ledger.ui.MeowApp
 import com.meow.ledger.ui.PermissionItem
@@ -51,6 +54,35 @@ class MainActivity : ComponentActivity() {
                 } else {
                     requestPermissions.launch(missing)
                 }
+            }
+
+            override fun requestPermission(key: String) {
+                val runtime = when (key) {
+                    AndroidPermissionGateway.KEY_NOTIFICATION ->
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                            android.Manifest.permission.POST_NOTIFICATIONS
+                        } else null
+                    AndroidPermissionGateway.KEY_MEDIA_IMAGES ->
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                            android.Manifest.permission.READ_MEDIA_IMAGES
+                        } else null
+                    AndroidPermissionGateway.KEY_CAMERA -> android.Manifest.permission.CAMERA
+                    else -> null
+                }
+                if (runtime != null && !gateway.missingRuntimePermissions().contains(runtime)) {
+                    permissions.value = gateway.statuses().map(::toItem)
+                } else if (runtime != null) {
+                    requestPermissions.launch(arrayOf(runtime))
+                } else {
+                    gateway.openSettings(key)
+                }
+            }
+
+            override fun permissionIntroSeen(): Boolean =
+                SettingsStore(AppGraph.database).flag(KEY_PERMISSION_INTRO_SHOWN, false)
+
+            override fun markPermissionIntroSeen() {
+                SettingsStore(AppGraph.database).setFlag(KEY_PERMISSION_INTRO_SHOWN, true)
             }
 
             override fun openSettings(key: String) = gateway.openSettings(key)
@@ -115,6 +147,7 @@ class MainActivity : ComponentActivity() {
                 }
             }.getOrDefault("当前系统不允许截屏，已打开待确认队列，可改用票据识别。")
         }
+        AppGraph.permissionHost = host
         target.value = targetFrom(intent)
         setContent {
             MeowApp(
