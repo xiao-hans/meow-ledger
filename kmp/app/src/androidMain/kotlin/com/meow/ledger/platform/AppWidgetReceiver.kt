@@ -34,13 +34,15 @@ class AppWidgetReceiver : AppWidgetProvider() {
         var expense = 0L
         var income = 0L
         val extras = mutableMapOf<String, String>()
+        var widgetRepo: WidgetRepository? = null
         try {
             val driver = AndroidSqliteDriver(MeowDatabase.Schema, context, "meow_ledger.db")
             val db = MeowDatabase(driver)
+            widgetRepo = WidgetRepository(db)
             val summary = BillsRepository(db).daySum(day)
             expense = summary.expense
             income = summary.income
-            val rows = WidgetRepository(db).extraRows()
+            val rows = widgetRepo.extraRows()
             val ym = day / 100
             if (WIDGET_ROW_BUDGET in rows) {
                 val view = BudgetRepository(db).view(ym)
@@ -59,7 +61,27 @@ class AppWidgetReceiver : AppWidgetProvider() {
         } catch (_: Throwable) {
             // 库还没建好时显示 0，不打断桌面。
         }
-        appWidgetIds.forEach { id -> render(context, appWidgetManager, id, expense, income, extras) }
+        appWidgetIds.forEach { id ->
+            val preview = runCatching {
+                val repo = widgetRepo ?: return@runCatching null
+                val row = repo.bindingOf(id)?.let { repo.get(it) } ?: return@runCatching null
+                repo.preview(row.kind, day / 100, day)
+            }.getOrNull()
+            render(context, appWidgetManager, id, expense, income, extras, preview)
+        }
+    }
+
+    /** 删掉桌面上的组件时，一并清掉本地配置和绑定，避免残留行。 */
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        super.onDeleted(context, appWidgetIds)
+        runCatching {
+            val driver = AndroidSqliteDriver(MeowDatabase.Schema, context, "meow_ledger.db")
+            val repo = WidgetRepository(MeowDatabase(driver))
+            appWidgetIds.forEach { id ->
+                repo.bindingOf(id)?.let(repo::delete)
+                repo.unbind(id)
+            }
+        }
     }
 
     private fun render(
@@ -69,13 +91,29 @@ class AppWidgetReceiver : AppWidgetProvider() {
         expense: Long,
         income: Long,
         extras: Map<String, String>,
+        preview: com.meow.ledger.shared.manage.WidgetPreview?,
     ) {
         val views = RemoteViews(context.packageName, R.layout.widget_meow)
-        views.setTextViewText(R.id.widget_expense, "支出 " + money(expense))
-        views.setTextViewText(R.id.widget_income, "收入 " + money(income))
-        extra(views, R.id.widget_budget, extras[WIDGET_ROW_BUDGET])
-        extra(views, R.id.widget_plan, extras[WIDGET_ROW_PLAN])
-        extra(views, R.id.widget_refund, extras[WIDGET_ROW_REFUND])
+        if (preview != null) {
+            // 配置过种类的组件按种类显示两行数字；计数类不走金额格式化。
+            views.setTextViewText(
+                R.id.widget_expense,
+                preview.firstLabel + " " + value(preview.firstValue, preview.firstMoney),
+            )
+            views.setTextViewText(
+                R.id.widget_income,
+                preview.secondLabel + " " + value(preview.secondValue, preview.secondMoney),
+            )
+            extra(views, R.id.widget_budget, null)
+            extra(views, R.id.widget_plan, null)
+            extra(views, R.id.widget_refund, null)
+        } else {
+            views.setTextViewText(R.id.widget_expense, "支出 " + money(expense))
+            views.setTextViewText(R.id.widget_income, "收入 " + money(income))
+            extra(views, R.id.widget_budget, extras[WIDGET_ROW_BUDGET])
+            extra(views, R.id.widget_plan, extras[WIDGET_ROW_PLAN])
+            extra(views, R.id.widget_refund, extras[WIDGET_ROW_REFUND])
+        }
         views.setOnClickPendingIntent(
             R.id.widget_root,
             PendingIntent.getActivity(
@@ -97,6 +135,8 @@ class AppWidgetReceiver : AppWidgetProvider() {
             views.setTextViewText(viewId, text)
         }
     }
+
+    private fun value(cents: Long, money: Boolean): String = if (money) money(cents) else cents.toString()
 
     private fun money(cents: Long): String {
         val y = cents / 100

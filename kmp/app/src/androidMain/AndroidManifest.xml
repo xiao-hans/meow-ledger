@@ -44,6 +44,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MeowLedger">
 
+        <!-- 桌面组件配置：系统添加组件时拉起，选种类后返回 appWidgetId。 -->
+        <activity
+            android:name=".WidgetConfigActivity"
+            android:exported="true"
+            android:theme="@style/Theme.MeowLedger" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

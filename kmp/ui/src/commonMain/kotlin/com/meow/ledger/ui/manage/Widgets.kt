@@ -146,11 +146,11 @@ private fun Preview(repo: WidgetRepository, row: Widget_user, month: Long) {
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
         Column {
             Text(preview.firstLabel, color = palette.textSecondary, fontSize = 12.sp)
-            Text(centsToYuan(preview.firstValue), color = palette.textPrimary)
+            Text(if (preview.firstMoney) centsToYuan(preview.firstValue) else preview.firstValue.toString(), color = palette.textPrimary)
         }
         Column {
             Text(preview.secondLabel, color = palette.textSecondary, fontSize = 12.sp)
-            Text(centsToYuan(preview.secondValue), color = palette.textPrimary)
+            Text(if (preview.secondMoney) centsToYuan(preview.secondValue) else preview.secondValue.toString(), color = palette.textPrimary)
         }
     }
 }

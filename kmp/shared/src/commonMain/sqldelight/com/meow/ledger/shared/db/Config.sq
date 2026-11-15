@@ -22,3 +22,6 @@ SELECT value FROM user_setting WHERE key = :key;
 
 upsertSetting:
 INSERT OR REPLACE INTO user_setting(key, value) VALUES ?;
+
+deleteSetting:
+DELETE FROM user_setting WHERE key = :key;
