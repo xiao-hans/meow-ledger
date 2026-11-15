@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.meow.ledger.shared.auto.KEY_APP_LOCK
+import com.meow.ledger.shared.auto.KEY_LOCK_BIOMETRIC
 import com.meow.ledger.shared.auto.KEY_SYNC_BASE_URL
 import com.meow.ledger.shared.auto.KEY_SYNC_CONFIG_BASE_URL
 import com.meow.ledger.shared.auto.KEY_THEME
@@ -360,6 +361,25 @@ private fun LockHome(settings: SettingsStore, onBack: () -> Unit, onNotice: (Str
         onNotice("口令已保存")
     }
     if (current.isNotEmpty()) {
+        val bioOn = remember(version) { settings.flag(KEY_LOCK_BIOMETRIC, true) }
+        Text("解锁方式", color = LocalPalette.current.textSecondary, modifier = Modifier.padding(top = 12.dp))
+        Text(
+            "指纹/面容不可用或取消时，仍可输入口令进入",
+            color = LocalPalette.current.textSecondary,
+            fontSize = 12.sp,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+            ChoiceChip("指纹 / 面容 + 口令", bioOn) {
+                settings.setFlag(KEY_LOCK_BIOMETRIC, true)
+                version += 1
+                onNotice("已允许生物识别解锁")
+            }
+            ChoiceChip("仅口令", !bioOn) {
+                settings.setFlag(KEY_LOCK_BIOMETRIC, false)
+                version += 1
+                onNotice("已关闭生物识别，仅用口令")
+            }
+        }
         if (confirm) ConfirmBar("关闭应用锁？下次打开不再需要口令。", { confirm = false }, {
             settings.setText(KEY_APP_LOCK, "")
             confirm = false

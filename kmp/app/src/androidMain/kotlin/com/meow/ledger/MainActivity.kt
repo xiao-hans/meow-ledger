@@ -182,6 +182,50 @@ class MainActivity : ComponentActivity() {
                     "无法打开截屏授权，请稍后重试或改用票据识别。"
                 }
             }.getOrDefault("当前系统不允许截屏，已打开待确认队列，可改用票据识别。")
+
+            /** 平台 BiometricPrompt 只在 API 28+ 可用；26–27 直接回退口令。 */
+            override fun biometricAvailable(): Boolean =
+                if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.P) {
+                    false
+                } else {
+                    runCatching {
+                        val manager = getSystemService(android.hardware.biometrics.BiometricManager::class.java)
+                        manager?.canAuthenticate(
+                            android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_WEAK,
+                        ) == android.hardware.biometrics.BiometricManager.BIOMETRIC_SUCCESS
+                    }.getOrDefault(false)
+                }
+
+            override fun requestBiometricUnlock(onResult: (Boolean) -> Unit) {
+                if (!biometricAvailable() || isFinishing) {
+                    onResult(false)
+                    return
+                }
+                runCatching {
+                    val prompt = android.hardware.biometrics.BiometricPrompt.Builder(this@MainActivity)
+                        .setTitle("解锁喵啊记账")
+                        .setSubtitle("验证指纹或面容；取消后仍可输入口令")
+                        .setNegativeButton("用口令", mainExecutor) { _, _ -> onResult(false) }
+                        .build()
+                    val signal = android.os.CancellationSignal()
+                    prompt.authenticate(
+                        signal,
+                        mainExecutor,
+                        object : android.hardware.biometrics.BiometricPrompt.AuthenticationCallback() {
+                            override fun onAuthenticationSucceeded(
+                                result: android.hardware.biometrics.BiometricPrompt.AuthenticationResult,
+                            ) {
+                                onResult(true)
+                            }
+
+                            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                                onResult(false)
+                            }
+                            // onAuthenticationFailed：手指未匹配但弹窗仍开着，等用户重试，不回调失败。
+                        },
+                    )
+                }.onFailure { onResult(false) }
+            }
         }
         AppGraph.permissionHost = host
         target.value = targetFrom(intent)

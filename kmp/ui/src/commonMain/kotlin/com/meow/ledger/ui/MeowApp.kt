@@ -155,6 +155,7 @@ private fun MainApp(
     var keepAlive by rememberSaveable { mutableStateOf(initial.keepAlive) }
     var watchApps by rememberSaveable { mutableStateOf(initial.watchApps) }
     var lockPin by rememberSaveable { mutableStateOf(initial.lockPin) }
+    var lockBiometric by rememberSaveable { mutableStateOf(initial.lockBiometric) }
     var unlocked by rememberSaveable { mutableStateOf(initial.lockPin.isEmpty()) }
     var autoPage by rememberSaveable {
         mutableStateOf(
@@ -217,6 +218,7 @@ private fun MainApp(
         keepAlive = fresh.keepAlive
         watchApps = fresh.watchApps
         lockPin = fresh.lockPin
+        lockBiometric = fresh.lockBiometric
         unlocked = fresh.lockPin.isEmpty()
         tab = 3
         minePage = ""
@@ -252,7 +254,15 @@ private fun MainApp(
     MeowTheme(theme) {
         if (!unlocked) {
             Box(Modifier.fillMaxSize().background(palette.appBg).statusBarsPadding()) {
-                LockGate(lockPin) { unlocked = true }
+                LockGate(
+                    pin = lockPin,
+                    onUnlock = { unlocked = true },
+                    biometricAvailable = lockBiometric &&
+                        AppGraph.permissionHost?.biometricAvailable() == true,
+                    requestBiometric = { cb ->
+                        AppGraph.permissionHost?.requestBiometricUnlock(cb) ?: cb(false)
+                    },
+                )
             }
             return@MeowTheme
         }

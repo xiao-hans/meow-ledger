@@ -85,6 +85,12 @@ interface EntryHost {
 
     /** 启动 MediaProjection 截屏采集；拒绝或组件缺失时返回兜底文案。 */
     fun startScreenCapture(): String
+
+    /** 本机是否具备可用的指纹/面容解锁；false 时 UI 不展示入口，只留口令。 */
+    fun biometricAvailable(): Boolean
+
+    /** 拉起生物识别；成功/取消/不可用都通过回调返回，失败时仍可用口令进入。 */
+    fun requestBiometricUnlock(onResult: (Boolean) -> Unit)
 }
 
 data class PermissionItem(

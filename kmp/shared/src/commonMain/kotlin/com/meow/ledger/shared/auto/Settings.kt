@@ -26,6 +26,9 @@ const val THEME_DARK = "dark"
 /** 应用锁的四位口令。空表示未开启。 */
 const val KEY_APP_LOCK = "app_lock_pin"
 
+/** 应用锁是否允许指纹/面容解锁；默认允许，硬件不可用时 UI 自动隐藏入口。 */
+const val KEY_LOCK_BIOMETRIC = "lock_biometric"
+
 /**
  * 自建后端 base URL。**空白表示禁用远程同步**：写操作照常落本地 `sync_queue`，
  * 但 `SyncEngine.flush()` 不发任何请求，绝不把账单/设备号/令牌发到样本原域名。
@@ -121,6 +124,7 @@ data class SettingsSnapshot(
     val keepAlive: Boolean,
     val watchApps: Set<String>,
     val lockPin: String,
+    val lockBiometric: Boolean = true,
 )
 
 /** 从库里读一份当前快照；设置行不存在的项由 SettingsStore 回退到缺省值。 */
@@ -130,4 +134,5 @@ fun SettingsStore.snapshot(): SettingsSnapshot = SettingsSnapshot(
     keepAlive = flag(KEY_KEEP_ALIVE, false),
     watchApps = watchApps(),
     lockPin = text(KEY_APP_LOCK),
+    lockBiometric = flag(KEY_LOCK_BIOMETRIC, true),
 )
