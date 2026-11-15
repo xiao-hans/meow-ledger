@@ -121,30 +121,38 @@ actual val platformOcrName: String? = "ML Kit 中文"
 
 private fun fileShareDir(): File = File(AndroidHost.appContext.cacheDir, "share").apply { mkdirs() }
 
+private fun copyOcrUri(context: Context, uri: Uri): String? = runCatching {
+    val dir = File(context.cacheDir, "ocr").apply { mkdirs() }
+    val name = queryName(context, uri).ifBlank { "ticket_${System.currentTimeMillis()}.jpg" }
+    val out = File(dir, name)
+    context.contentResolver.openInputStream(uri)?.use { input ->
+        out.outputStream().use { output -> input.copyTo(output) }
+    } ?: return null
+    out.absolutePath
+}.getOrNull()
+
+private fun recognizeChinese(
+    context: Context,
+    path: String,
+    onDone: (String?) -> Unit,
+) {
+    runCatching {
+        val image = InputImage.fromFilePath(context, Uri.fromFile(File(path)))
+        val recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
+        recognizer.process(image)
+            .addOnSuccessListener { visionText -> onDone(visionText.text) }
+            .addOnFailureListener { onDone(null) }
+    }.onFailure { onDone(null) }
+}
+
 @Composable
 actual fun PickImageButton(enabled: Boolean, modifier: Modifier, onPicked: (path: String, ocrText: String?) -> Unit) {
     val context = LocalContext.current
     // 系统照片选择器（Android 13+）：无需媒体权限，直接给图片网格。
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
-        val name = queryName(context, uri)
-        val copied = runCatching {
-            val dir = File(context.cacheDir, "ocr").apply { mkdirs() }
-            val out = File(dir, name.ifBlank { "ticket.jpg" })
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                out.outputStream().use { output -> input.copyTo(output) }
-            }
-            out.absolutePath
-        }.getOrNull()
-        if (copied == null) return@rememberLauncherForActivityResult
-        // 本地 bundled 中文 OCR：识别失败时文本回 null，页面只登记图片。
-        runCatching {
-            val image = InputImage.fromFilePath(context, Uri.fromFile(File(copied)))
-            val recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
-            recognizer.process(image)
-                .addOnSuccessListener { visionText -> onPicked(copied, visionText.text) }
-                .addOnFailureListener { onPicked(copied, null) }
-        }.onFailure { onPicked(copied, null) }
+        val copied = copyOcrUri(context, uri) ?: return@rememberLauncherForActivityResult
+        recognizeChinese(context, copied) { text -> onPicked(copied, text) }
     }
     val palette = LocalPalette.current
     Box(
@@ -157,5 +165,52 @@ actual fun PickImageButton(enabled: Boolean, modifier: Modifier, onPicked: (path
         contentAlignment = Alignment.Center,
     ) {
         Text("选择票据图", color = palette.cardBg, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+actual fun PickMultipleImagesButton(
+    enabled: Boolean,
+    modifier: Modifier,
+    onPicked: (List<Pair<String, String?>>) -> Unit,
+) {
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(),
+    ) { uris: List<Uri> ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        val slots = arrayOfNulls<Pair<String, String?>>(uris.size)
+        var remaining = uris.size
+        fun finishOne() {
+            remaining -= 1
+            if (remaining == 0) {
+                onPicked(slots.mapNotNull { it })
+            }
+        }
+        uris.forEachIndexed { index, uri ->
+            val copied = copyOcrUri(context, uri)
+            if (copied == null) {
+                finishOne()
+                return@forEachIndexed
+            }
+            recognizeChinese(context, copied) { text ->
+                slots[index] = copied to text
+                finishOne()
+            }
+        }
+    }
+    val palette = LocalPalette.current
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .background(if (enabled) palette.brand else palette.divider)
+            .clickable(enabled = enabled) {
+                launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("多选票据图", color = palette.cardBg, fontSize = 15.sp, fontWeight = FontWeight.Medium)
     }
 }

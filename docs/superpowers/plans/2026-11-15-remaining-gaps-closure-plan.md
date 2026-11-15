@@ -2,7 +2,7 @@
 title: 剩余缺口收口实施计划
 date: 2026-11-15
 design: docs/superpowers/specs/2026-11-15-remaining-gaps-closure-design.md
-status: W1.1–W1.2 完成；下一切片 W1.3
+status: W1.1–W1.3 完成；下一切片 W1.4
 ---
 
 # 剩余缺口收口实施计划
@@ -38,7 +38,13 @@ status: W1.1–W1.2 完成；下一切片 W1.3
 
 ## W1.3 OCR 多选 + 缩略图 + ticket_image 写入
 
-状态：未开始。
+状态：完成（提交号见提交表）。
+
+- [x] `captureTicket(..., imagePath, thumbPath)` 写 `ticket_image`；重复事件可补图
+- [x] `confirm` 拼 `Bill.images` 逗号路径；Pending「有图 N」标记（本切片不渲染位图）
+- [x] `PickMultipleImagesButton`（Android `PickMultipleVisualMedia` / jvm 占位）
+- [x] OcrPage 多选每图各调一次；粘贴/手动 `imagePath=null`
+- [x] AutoTicketTest 补 images / 重复补图；`:shared:jvmTest :app:assembleDebug checkAdDeps` 绿（239 用例）
 
 ## W1.4 AcEvents 目录 + 本地上报队列
 
@@ -53,4 +59,5 @@ status: W1.1–W1.2 完成；下一切片 W1.3
 | 切片 | 提交 | 验证 |
 |---|---|---|
 | W1.1 | `ca3d62e` | MigrationTest --rerun-tasks 绿 |
-| W1.2 | 待填（本提交） | jvmTest + assembleDebug + checkAdDeps 绿 |
+| W1.2 | `6d353fe` | jvmTest + assembleDebug + checkAdDeps 绿 |
+| W1.3 | 待填（本提交） | jvmTest 239 + assembleDebug + checkAdDeps 绿 |

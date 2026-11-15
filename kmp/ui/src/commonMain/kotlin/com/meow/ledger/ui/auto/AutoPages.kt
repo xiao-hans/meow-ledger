@@ -60,6 +60,8 @@ import com.meow.ledger.ui.theme.glassCard
 fun PendingPage(
     events: List<Auto_event>,
     categories: List<Category>,
+    /** eventId → 关联票据图数量；本切片只显示「有图 N」，不渲染位图。 */
+    imageCounts: Map<String, Int> = emptyMap(),
     onBack: () -> Unit,
     onConfirmOne: (String, PendingEdit?) -> Unit,
     onBatchConfirm: (Set<String>, Map<String, PendingEdit>) -> Unit,
@@ -127,6 +129,10 @@ fun PendingPage(
                 }
                 Spacer(Modifier.height(4.dp))
                 Text("${sourceLabel(event.source)} · ${event.raw_text}", color = palette.textSecondary, fontSize = 12.sp)
+                val imgCount = imageCounts[event.id] ?: 0
+                if (imgCount > 0) {
+                    Text("有图 $imgCount", color = palette.brand, fontSize = 12.sp)
+                }
                 if (edit != null) {
                     Text("已修改：${edit.desc.ifBlank { event.merchant }} · ${categoryName(categories, edit.memberCateId)}", color = palette.textSecondary, fontSize = 12.sp)
                 }

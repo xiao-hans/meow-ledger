@@ -226,18 +226,25 @@ class AutoRepository(private val db: MeowDatabase) {
     /**
      * 票据 OCR 专用：整图文本一次解析，只产出一条候选。
      * 不按行拆分——金额行和商户行在票据里是分开的，拆开会把商户丢成「未识别商户」。
+     * imagePath / thumbPath 非空时写入 ticket_image；确认入账时路径拼进 Bill.images。
      */
     fun captureTicket(
         rawText: String,
         source: String,
         occurredAt: Long = currentTimeMillis(),
         sourceApp: String = sourceLabel(source),
+        imagePath: String? = null,
+        thumbPath: String? = null,
     ): CaptureResult {
         val parsed = parseRaw(rawText, source, preferAfterMoney = true)
         if (parsed == null) return CaptureResult(0, 0, 1)
         val full = parsed.copy(sourceApp = sourceApp)
         val hash = dedupKey(full.sourceApp, full.money, occurredAt, full.merchant)
-        if (db.autoQueries.selectByHash(hash).executeAsOneOrNull() != null) return CaptureResult(0, 1, 0)
+        if (db.autoQueries.selectByHash(hash).executeAsOneOrNull() != null) {
+            // 重复事件仍可补挂图（同一票据再选一次图）。
+            attachTicketImage(hash, imagePath, thumbPath, occurredAt)
+            return CaptureResult(0, 1, 0)
+        }
         val rules = rules()
         val rule = matchRule(rules, full.merchant, rawText)
         val now = occurredAt / 1000
@@ -262,8 +269,31 @@ class AutoRepository(private val db: MeowDatabase) {
                 create_time = now,
             ),
         )
+        attachTicketImage(hash, imagePath, thumbPath, occurredAt)
         track("ac_auto_capture", "${full.merchant}|${full.money}|$source")
         return CaptureResult(1, 0, 0)
+    }
+
+    /** 事件关联的票据图（原图路径在 path，缩略图在 thumb_path）。 */
+    fun imagesOf(eventId: String): List<com.meow.ledger.shared.db.Ticket_image> =
+        db.ticketQueries.selectByEvent(eventId).executeAsList()
+
+    private fun attachTicketImage(
+        eventId: String,
+        imagePath: String?,
+        thumbPath: String?,
+        occurredAt: Long,
+    ) {
+        val path = imagePath?.trim().orEmpty()
+        if (path.isEmpty()) return
+        db.ticketQueries.upsert(
+            com.meow.ledger.shared.db.Ticket_image(
+                event_id = eventId,
+                path = path,
+                thumb_path = thumbPath?.trim().orEmpty(),
+                create_time = occurredAt,
+            ),
+        )
     }
 
     /** 埋点：与 AccountRepository.track 同表，AutoRepository 只拿得到 db，就地写。 */
@@ -290,6 +320,7 @@ class AutoRepository(private val db: MeowDatabase) {
         val desc = (edit?.desc ?: event.desc).ifBlank { event.merchant }
         val cateId = edit?.memberCateId ?: event.member_cate_id
         val day = dayOf(event.occurred_at)
+        val imagePaths = imagesOf(event.id).map { it.path }.filter { it.isNotBlank() }
         val bill = Bill(
             member_id = memberId,
             client_id = "auto-${event.hash}",
@@ -303,7 +334,7 @@ class AutoRepository(private val db: MeowDatabase) {
             day = day,
             desc = desc,
             not_in_budget = 0,
-            images = "",
+            images = imagePaths.joinToString(","),
             update_date = event.occurred_at,
             create_date = event.occurred_at,
             status = 0,

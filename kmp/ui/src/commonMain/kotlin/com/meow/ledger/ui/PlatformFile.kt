@@ -31,3 +31,14 @@ expect val platformOcrName: String?
  */
 @Composable
 expect fun PickImageButton(enabled: Boolean, modifier: Modifier = Modifier, onPicked: (path: String, ocrText: String?) -> Unit)
+
+/**
+ * 一次多选票据图。每张图拷贝到本地后回传 (path, ocrText?)；顺序与系统选择器返回顺序一致。
+ * 没有 OCR 引擎时 ocrText 一律为 null，但仍回传路径，页面可提示「图片已登记」。
+ */
+@Composable
+expect fun PickMultipleImagesButton(
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onPicked: (List<Pair<String, String?>>) -> Unit,
+)

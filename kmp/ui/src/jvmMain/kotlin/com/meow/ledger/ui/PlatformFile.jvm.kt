@@ -56,3 +56,22 @@ actual fun PickImageButton(enabled: Boolean, modifier: Modifier, onPicked: (path
         Text("选择票据图", color = palette.textSecondary, fontSize = 15.sp)
     }
 }
+
+@Composable
+actual fun PickMultipleImagesButton(
+    enabled: Boolean,
+    modifier: Modifier,
+    onPicked: (List<Pair<String, String?>>) -> Unit,
+) {
+    val palette = LocalPalette.current
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .background(palette.divider),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("多选票据图", color = palette.textSecondary, fontSize = 15.sp)
+    }
+}

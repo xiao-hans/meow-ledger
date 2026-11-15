@@ -111,4 +111,31 @@ class AutoTicketTest {
         assertEquals(0, again.created)
         assertEquals(1, again.duplicate)
     }
+
+    @Test
+    fun captureTicketWithImageWritesTicketImageAndConfirmFillsBillImages() {
+        val text = "微信支付\n¥12.00\n星巴克\n2026年11月15日 12:00"
+        val path = "/tmp/tickets/starbucks.jpg"
+        val result = repo.captureTicket(text, "ocr", imagePath = path, thumbPath = "/tmp/tickets/starbucks_thumb.jpg")
+        assertEquals(1, result.created)
+        val event = repo.pending().single()
+        val images = repo.imagesOf(event.id)
+        assertEquals(1, images.size)
+        assertEquals(path, images.single().path)
+        assertEquals("/tmp/tickets/starbucks_thumb.jpg", images.single().thumb_path)
+
+        val bill = repo.confirm(event)
+        assertEquals(path, bill.images)
+    }
+
+    @Test
+    fun duplicateTicketCanAttachImageLater() {
+        val text = "支付成功 ¥8.80 便利店"
+        repo.captureTicket(text, "ocr")
+        val again = repo.captureTicket(text, "ocr", imagePath = "/tmp/tickets/store.jpg")
+        assertEquals(1, again.duplicate)
+        val event = repo.pending().single()
+        assertEquals(1, repo.imagesOf(event.id).size)
+        assertEquals("/tmp/tickets/store.jpg", repo.imagesOf(event.id).single().path)
+    }
 }

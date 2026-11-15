@@ -525,12 +525,15 @@ private fun AutoPages(
         }
         "ocr" -> OcrPage(
             onBack,
-            onCaptureText = { text -> captureSummary(auto.captureTicket(text, SOURCE_OCR)) },
+            onCaptureText = { text, imagePath ->
+                captureSummary(auto.captureTicket(text, SOURCE_OCR, imagePath = imagePath))
+            },
             onOpenPending = onOpenPending,
         )
         "pending" -> PendingPage(
             events = auto.pending(),
             categories = categories,
+            imageCounts = auto.pending().associate { it.id to auto.imagesOf(it.id).size },
             onBack = onBack,
             onConfirmOne = { id, edit -> auto.pendingById(id)?.let { auto.confirm(it, edit = edit) } },
             onBatchConfirm = { ids, edits -> auto.confirmAll(ids, edits) },

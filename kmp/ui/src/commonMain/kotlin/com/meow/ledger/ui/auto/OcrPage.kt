@@ -29,25 +29,27 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.meow.ledger.ui.PickImageButton
+import com.meow.ledger.ui.PickMultipleImagesButton
 import com.meow.ledger.ui.platformOcrName
 import com.meow.ledger.ui.theme.LocalPalette
 
 /**
  * 截屏 OCR 页。三步：
- * 1. 选图（引擎接入时自动识别）或粘贴支付文本；
+ * 1. 多选票据图（引擎接入时自动识别）或粘贴支付文本；
  * 2. 结果只进待确认队列，绝不静默入账；
  * 3. 金额、商户都可以在确认前改。
+ *
+ * onCaptureText(text, imagePath)：粘贴/手动时 imagePath 为空；多选时每张图各调一次。
  */
 @Composable
 fun OcrPage(
     onBack: () -> Unit,
-    onCaptureText: (String) -> String,
+    onCaptureText: (text: String, imagePath: String?) -> String,
     onOpenPending: () -> Unit,
 ) {
     val palette = LocalPalette.current
     var pasted by rememberSaveable { mutableStateOf("") }
-    var pickedPath by rememberSaveable { mutableStateOf("") }
+    var pickedSummary by rememberSaveable { mutableStateOf("") }
     var manualMoney by rememberSaveable { mutableStateOf("") }
     var manualMerchant by rememberSaveable { mutableStateOf("") }
     var message by rememberSaveable { mutableStateOf("") }
@@ -57,23 +59,35 @@ fun OcrPage(
         Column(Modifier.padding(horizontal = 18.dp).fillMaxWidth()) {
             Text("识别方式", color = palette.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Text(
-                if (platformOcrName == null) "文字识别引擎未接入。可以先选图登记，或粘贴支付文本提取金额与商户。"
-                else "使用 " + platformOcrName + " 识别图片文字。",
+                if (platformOcrName == null) "文字识别引擎未接入。可以先多选图登记，或粘贴支付文本提取金额与商户。"
+                else "使用 " + platformOcrName + " 识别图片文字；可一次选多张。",
                 color = palette.textSecondary,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(top = 4.dp),
             )
             Spacer(Modifier.height(12.dp))
-            PickImageButton(enabled = true, modifier = Modifier.fillMaxWidth()) { path, ocrText ->
-                pickedPath = path
-                if (ocrText.isNullOrBlank()) {
-                    message = "图片已登记：" + path.substringAfterLast('/')
-                } else {
-                    message = onCaptureText(ocrText)
+            PickMultipleImagesButton(enabled = true, modifier = Modifier.fillMaxWidth()) { items ->
+                if (items.isEmpty()) {
+                    message = "未选中图片"
+                    return@PickMultipleImagesButton
                 }
+                val parts = mutableListOf<String>()
+                var ok = 0
+                var bare = 0
+                items.forEach { (path, ocrText) ->
+                    if (ocrText.isNullOrBlank()) {
+                        bare += 1
+                        parts += "无文字：" + path.substringAfterLast('/')
+                    } else {
+                        ok += 1
+                        parts += onCaptureText(ocrText, path)
+                    }
+                }
+                pickedSummary = "已处理 ${items.size} 张（识别 $ok · 无文字 $bare）"
+                message = parts.joinToString("；")
             }
-            if (pickedPath.isNotEmpty()) {
-                Text(pickedPath, color = palette.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+            if (pickedSummary.isNotEmpty()) {
+                Text(pickedSummary, color = palette.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
             }
 
             Spacer(Modifier.height(12.dp))
@@ -85,7 +99,7 @@ fun OcrPage(
             )
             Spacer(Modifier.height(10.dp))
             ActionButton("识别文本并加入待确认", pasted.isNotBlank()) {
-                message = onCaptureText(pasted)
+                message = onCaptureText(pasted, null)
                 pasted = ""
             }
 
@@ -109,11 +123,10 @@ fun OcrPage(
                 "登记为待确认",
                 manualMoney.toDoubleOrNull() != null && manualMerchant.isNotBlank(),
             ) {
-                message = onCaptureText("在" + manualMerchant + "消费¥" + manualMoney)
+                message = onCaptureText("在" + manualMerchant + "消费¥" + manualMoney, null)
                 manualMoney = ""
                 manualMerchant = ""
             }
-
             if (message.isNotEmpty()) {
                 Text(message, color = palette.textPrimary, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
             }
