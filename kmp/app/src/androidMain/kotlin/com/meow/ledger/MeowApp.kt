@@ -25,6 +25,8 @@ class MeowApp : Application() {
     override fun onCreate() {
         super.onCreate()
         val driver = AndroidSqliteDriver(MeowDatabase.Schema, this, "meow_ledger.db")
+        // 历史构建漏过迁移的库，版本号已经是新的但缺列；先补齐再让任何仓储查表。
+        com.meow.ledger.shared.db.SchemaRepair.run(driver)
         val database = MeowDatabase(driver)
         AppGraph.database = database
         AppGraph.driver = driver

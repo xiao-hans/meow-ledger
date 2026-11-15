@@ -24,6 +24,14 @@ kotlin {
             // 截屏采集服务复用 ui 模块同一套本地中文 OCR 引擎。
             implementation(libs.mlkit.text.recognition.chinese)
         }
+
+        // 真机仪器测试：启动、数据库迁移与深链解析，补上「真机手工路径不能替代自动化」的缺口。
+        androidInstrumentedTest.dependencies {
+            implementation("androidx.test.ext:junit:1.2.1")
+            implementation("androidx.test:runner:1.6.2")
+            implementation("androidx.test:core-ktx:1.6.1")
+            implementation(libs.sqldelight.android.driver)
+        }
     }
 }
 
@@ -37,6 +45,7 @@ android {
         targetSdk = 36
         versionCode = 8
         versionName = "1.8.8"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildFeatures {
