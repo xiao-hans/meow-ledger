@@ -186,6 +186,6 @@ ad_free: 不接入广告 SDK，不调用广告请求端点
 | S8 | `2a8c806` | 118 tests 0 fail；埋点三类落库 E2E（ac_add_bill×2 入库实证） | 模拟器记账保存+埋点；imePadding 键盘遮挡修复后回归截图 | 完成 |
 | S9（免费解锁与数据迁移） | 本提交 | `:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL；`git diff --check` 通过；BackupTest/SampleCsvTest 覆盖全库备份与样本 CSV | vivo V2419A 真机：Mine 显示「全部功能已解锁」，备份页导出 JSON 成功（含 4 笔账与分类）、无红色失败提示 | 完成（恢复/文件选择待人工） |
 | S10（权限申请与跨品牌适配） | 本提交 | `:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL；`git diff --check` 通过 | vivo V2419A 真机：冷启动权限门文案/去设置按钮/不支持原因/已开启状态截图，启动无 FATAL | 完成（其它品牌真机待验） |
-| S11（首次清单与按功能引导） | 本提交 | `:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL；`git diff --check` 通过；新增持久化与功能映射 JVM 测试 | 未验：无线调试离线，`adb mdns services` 为空；待机主重新开启无线调试后补冷启动、二次启动、主动打开与功能引导截图 | 完成（真机待验） |
+| S11（首次清单与按功能引导） | `b3678b8` | `:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL；`git diff --check` 通过；新增持久化与功能映射 JVM 测试 | 未验：无线调试离线，`adb mdns services` 为空；待机主重新开启无线调试后补冷启动、二次启动、主动打开与功能引导截图 | 完成（真机待验） |
 
 > **实测基线（2026-11-12 状态对账时补记）**：`origin/master` 上的 `:shared:jvmTest` = **139 tests / 0 failures**，`:app:assembleDebug` = **BUILD SUCCESSFUL**；环境 JDK 17.0.21 + Gradle 8.11.1（wrapper jar 方式，无 `gradlew` 脚本）。上表各切片的「96 / 100 / 113 / 116 / 118 tests」是当时提交记录里的历史数字，与最新基线口径不同，不要累加或当成当前值；本次对账未逐个重跑历史提交。三个先于状态对账 PR 合并的分支各自报告的测试数：PR #3 `fix/network-contract` 174 用例、PR #2 `fix/db-migration-v3` 145 用例、PR `fix/interaction-discipline` 新增 `AutoBatchConfirmTest` / `ClearLocalDataTest`（各分支独立口径，合并后以 CI 实测为准）。
