@@ -28,17 +28,20 @@ import com.meow.ledger.shared.auto.SettingsStore
 import com.meow.ledger.shared.auto.THEME_DARK
 import com.meow.ledger.shared.auto.THEME_LIGHT
 import com.meow.ledger.shared.auto.THEME_SYSTEM
-import com.meow.ledger.shared.bills.centsToYuan
 import com.meow.ledger.shared.bills.toCents
+import com.meow.ledger.shared.manage.BackupPreview
+import com.meow.ledger.shared.manage.BackupRepository
+import com.meow.ledger.ui.AppGraph
+import com.meow.ledger.ui.ImportBackupButton
+import com.meow.ledger.ui.copyText
+import com.meow.ledger.ui.nowBackupName
+import com.meow.ledger.ui.shareTextFile
 import com.meow.ledger.shared.db.MeowDatabase
 import com.meow.ledger.shared.network.validateSyncUrl
 import com.meow.ledger.shared.manage.AccountRepository
 import com.meow.ledger.shared.manage.MigrationState
-import com.meow.ledger.shared.manage.GroupRepository
 import com.meow.ledger.shared.manage.REMOTE_SWITCHES
 import com.meow.ledger.shared.manage.RemoteKind
-import com.meow.ledger.shared.manage.SHOW_ID_MAX
-import com.meow.ledger.shared.manage.VIP_PLANS
 import com.meow.ledger.ui.auto.ActionButton
 import com.meow.ledger.ui.auto.BackHeader
 import com.meow.ledger.ui.theme.DangerConfirmDialog
@@ -47,7 +50,7 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
-/** 账号、会员、导入、合约、反馈、应用锁、设置。 */
+/** 账号、导入、迁移、反馈、应用锁、设置。 */
 @Composable
 fun AccountPage(
     page: String,
@@ -60,7 +63,7 @@ fun AccountPage(
     onBack: () -> Unit,
     initialNotice: String = "",
 ) {
-    // 支付回调等深链带来的状态先显示出来，用户可自行核对订单，不会被静默改写成成功。
+    // 外部入口带来的状态先显示出来，不静默改写本机数据。
     var notice by remember { mutableStateOf(initialNotice) }
     var noticeIsError by remember { mutableStateOf(false) }
     Column(
@@ -71,17 +74,18 @@ fun AccountPage(
         when (page) {
             "account" -> AccountHome(account, onBack, onNotice)
             "change-phone" -> ChangePhoneHome(account, onBack, onNotice)
-            "vip" -> VipHome(database, account, onBack, onNotice)
-            "imports" -> ImportHome(account, onBack, onNotice)
-            "contract" -> ContractHome(account, onBack, onNotice)
+            "imports" -> ImportLogHome(account, onOpen, onBack, onNotice)
+            "migration" -> MigrationHome(account, onBack, onNotice)
             "feedback" -> FeedbackHome(account, onBack, onNotice)
             "lock" -> LockHome(settings, onBack, onNotice)
             "push" -> PushHome(account, { onOpen("fixed") }, onBack, onNotice)
             "remote" -> RemoteHome(account, onBack, onNotice)
             "settings" -> SettingsHome(settings, onTheme, onClear, onBack, onNotice)
+            "backup" -> BackupHome(database, onBack, onNotice)
+            else -> UnknownPage(onBack)
         }
         if (notice.isNotEmpty()) {
-            // 支付回调只是状态说明，不是危险操作；只有页面内的校验失败才用 danger（§6.10）。
+            // 外部入口只是状态说明，不是危险操作；只有页面内的校验失败才用 danger（§6.10）。
             Text(
                 notice,
                 color = if (noticeIsError) LocalPalette.current.danger else LocalPalette.current.textPrimary,
@@ -184,94 +188,103 @@ private fun ChangePhoneHome(account: AccountRepository, onBack: () -> Unit, onNo
 }
 
 @Composable
-private fun VipHome(database: MeowDatabase, account: AccountRepository, onBack: () -> Unit, onNotice: (String) -> Unit) {
-    val palette = LocalPalette.current
+private fun MigrationHome(account: AccountRepository, onBack: () -> Unit, onNotice: (String) -> Unit) {
     var version by remember { mutableStateOf(0) }
-    var group by remember { mutableStateOf(false) }
-    val profile = remember(version) { account.profile() }
-    val orders = remember(version) { account.orders() }
-    if (group) {
-        GroupHome(GroupRepository(database), { group = false }, onNotice)
-        return
+    val migration = remember(version) { account.migration() }
+    BackHeader("老用户数据迁移", onBack)
+    MigrationCard(migration) {
+        val result = account.migrateOldUser()
+        version += 1
+        onNotice(if (result.already) "之前已经迁移过，没有重复写入" else "本机数据已标记为迁移完成")
     }
-    BackHeader("会员", onBack)
+}
+
+@Composable
+private fun BackupHome(database: MeowDatabase, onBack: () -> Unit, onNotice: (String) -> Unit) {
+    val palette = LocalPalette.current
+    val backup = remember { BackupRepository(database, AppGraph.driver) }
+    var pending by remember { mutableStateOf<BackupPreview?>(null) }
+    var pendingText by remember { mutableStateOf("") }
+    var pendingName by remember { mutableStateOf("") }
+    var showText by remember { mutableStateOf("") }
+    BackHeader("备份与恢复", onBack)
     GlassCard {
-        Text(if (profile.vip == 1L) "会员有效" else "还不是会员", color = palette.textPrimary)
-        if (profile.vip_expire > 0) Text("到期 ${dateOf(profile.vip_expire)}", color = palette.textSecondary, modifier = Modifier.padding(top = 4.dp))
+        Text("全库备份", color = palette.textPrimary)
+        Text(
+            "把账单、账本、分类、资产、预算和设置导出成一个 JSON 文件。文件保存在本机或由你选择分享位置。",
+            color = palette.textSecondary,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        ActionButton("导出备份", true) {
+            val content = runCatching { backup.export() }.getOrElse {
+                onNotice("导出失败：${it.message ?: "无法读取本机数据"}")
+                return@ActionButton
+            }
+            showText = content
+            val name = "meow-backup-${nowBackupName()}.json"
+            onNotice(if (shareTextFile(name, content)) "已发起分享 $name" else "已生成 $name，请在下方复制保存")
+        }
     }
-    VIP_PLANS.forEach { plan ->
+    if (showText.isNotEmpty()) {
         GlassCard {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("${plan.name} · ${plan.days} 天", color = palette.textPrimary)
-                Text("${centsToYuan(plan.money)} 元", color = palette.textPrimary)
-            }
-            ActionButton("开通", true) {
-                if (account.createOrder(plan.id) == null) onNotice("没有这个套餐")
-                else { version += 1; onNotice("${plan.name}已开通") }
-            }
+            Text("备份内容", color = palette.textPrimary)
+            Text(showText, color = palette.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+            ActionButton("复制备份", true) { copyText(showText) }
         }
     }
-    if (orders.isEmpty()) Empty("还没有订单", "开通后订单会列在这里")
-    orders.forEach { order ->
-        Text("${order.product_name} · ${centsToYuan(order.money)} 元 · ${dateOf(order.create_time)}", color = palette.textSecondary, modifier = Modifier.padding(top = 6.dp))
-    }
-    GlassCard(onClick = { group = true }) {
-        Text("拼团", color = palette.textPrimary)
-        Text("本地模拟，不发起真实分享", color = palette.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
-    }
-}
-
-/** 拼团只写本地记录。点一条按展示码回查，不会跳转分享或支付。 */
-@Composable
-private fun GroupHome(group: GroupRepository, onBack: () -> Unit, onNotice: (String) -> Unit) {
-    val palette = LocalPalette.current
-    var version by remember { mutableStateOf(0) }
-    val rows = remember(version) { group.list() }
-    var code by remember { mutableStateOf("") }
-    BackHeader("拼团", onBack)
     GlassCard {
-        Text("拼团只写本地记录。没有分享，没有支付渠道。", color = palette.textSecondary, fontSize = 13.sp)
-        Field("展示码", code, { if (it.length <= SHOW_ID_MAX) code = it }, "自拟一串，用来回查")
-        ActionButton("加入本地拼团", code.isNotBlank()) {
-            val showId = code.trim()
-            if (showId.isEmpty()) onNotice("先填写展示码")
-            else if (group.bind(showId) == null) onNotice("展示码不能超过 $SHOW_ID_MAX 个字")
-            else { code = ""; version += 1; onNotice("已记录") }
-        }
+        Text("从备份恢复", color = palette.textPrimary)
+        Text("选择 .json 备份文件后先预览内容。恢复会替换当前全部数据，系统会先自动导出一份当前备份。", color = palette.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+        ImportBackupButton(true, onPicked = { name, content ->
+            val preview = runCatching { backup.summary(content) }.getOrElse {
+                onNotice("备份文件无法读取：${it.message ?: "格式不正确"}")
+                return@ImportBackupButton
+            }
+            pendingText = content
+            pendingName = name
+            pending = preview
+        })
     }
-    if (rows.isEmpty()) Empty("还没有拼团记录", "填一个展示码就能加入")
-    rows.forEach { row ->
-        GlassCard(onClick = {
-            val hit = group.check(row.show_id)
-            onNotice(if (hit.isVip == 1L) "记录在册" else "没有这条记录")
-        }) {
-            Text(row.show_id.ifBlank { row.id }, color = palette.textPrimary)
-            Text(if (row.status == 1L) "已记录" else "未记录", color = palette.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+    val preview = pending
+    if (preview != null) {
+        GlassCard {
+            Text("待恢复：$pendingName", color = palette.textPrimary)
+            Text("版本 ${preview.version} · ${preview.bills} 笔账单 · ${preview.books} 个账本 · ${preview.categories} 个分类 · 共 ${preview.rows} 行", color = palette.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
         }
+        ConfirmBar("恢复这份备份？当前全部数据会被替换；恢复前的备份会自动导出，建议先保存。", { pending = null; pendingText = "" }, {
+            val before = runCatching { backup.restore(pendingText) }.getOrElse {
+                onNotice("恢复失败：${it.message ?: "数据没有改动"}")
+                pending = null
+                return@ConfirmBar
+            }
+            showText = before.previousBackup
+            onNotice("已恢复 ${before.preview.bills} 笔账单。恢复前的数据已显示在下方，请复制保存")
+            pending = null
+            pendingText = ""
+        }, "恢复")
     }
 }
 
+/** 导入记录页：复用通用 CSV 导入器，登记过的文件可重新导入。 */
 @Composable
-private fun ImportHome(account: AccountRepository, onBack: () -> Unit, onNotice: (String) -> Unit) {
+private fun ImportLogHome(
+    account: AccountRepository,
+    onOpen: (String) -> Unit,
+    onBack: () -> Unit,
+    onNotice: (String) -> Unit,
+) {
     var version by remember { mutableStateOf(0) }
-    var name by remember { mutableStateOf("") }
-    var content by remember { mutableStateOf("") }
-    var pending by remember { mutableStateOf("") }
     val rows = remember(version) { account.imports() }
+    var pending by remember { mutableStateOf("") }
     BackHeader("导入账单", onBack)
     Text("这里只登记导入记录。每行算一笔，账单正文原样留存，删除记录不会删账单。", color = LocalPalette.current.textSecondary)
-    Field("名称", name, { name = it }, "例如 10 月支付宝")
-    Field("内容（每行一笔）", content, { content = it }, "早餐 12.5")
-    ActionButton("登记", content.isNotBlank()) {
-        val count = content.lines().count { it.isNotBlank() }
-        account.recordImport(name, count, content)
-        name = ""; content = ""; version += 1; onNotice("已登记 $count 笔")
-    }
-    if (rows.isEmpty()) Empty("还没有导入记录", "粘贴一份账单文本就能登记")
+    ActionButton("导入新账单", true) { onOpen("import") }
+    if (rows.isEmpty()) Empty("还没有导入记录", "选择一份 CSV 或粘贴账单就能登记")
     rows.forEach { row ->
-        GlassCard {
-            Text("${row.name} · ${row.count} 笔", color = LocalPalette.current.textPrimary)
-            Text(row.content.lineSequence().firstOrNull().orEmpty(), color = LocalPalette.current.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+        GlassCard(onClick = { onOpen("import:${row.id}") }) {
+            Text(row.name, color = LocalPalette.current.textPrimary)
+            Text("${row.count} 笔", color = LocalPalette.current.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
         if (pending == row.id) ConfirmBar("删除导入记录「${row.name}」？账单本身不会被删除。", { pending = "" }, {
             account.deleteImport(row.id); pending = ""; version += 1; onNotice("记录已删除")
@@ -281,36 +294,10 @@ private fun ImportHome(account: AccountRepository, onBack: () -> Unit, onNotice:
 }
 
 @Composable
-private fun ContractHome(account: AccountRepository, onBack: () -> Unit, onNotice: (String) -> Unit) {
-    var version by remember { mutableStateOf(0) }
-    var confirm by remember { mutableStateOf(false) }
-    val contract = remember(version) { account.contract() }
-    val migration = remember(version) { account.migration() }
-    val plan = VIP_PLANS.first()
-    BackHeader("自动续费", onBack)
-    MigrationCard(migration) {
-        val result = account.migrateOldUser()
-        version += 1
-        onNotice(if (result.already) "之前已经迁移过，没有重复写入" else "本机数据已标记为迁移完成")
-    }
-    if (contract.signed == 1L) {
-        GlassCard {
-            Text("已签约 ${contract.product_name}", color = LocalPalette.current.textPrimary)
-            Text("${contract.provider} · ${centsToYuan(contract.money)} 元 · 下次 ${contract.next_date}", color = LocalPalette.current.textSecondary, modifier = Modifier.padding(top = 4.dp))
-        }
-        if (confirm) ConfirmBar("解除自动续费？到期后不再扣费，已开通的会员不受影响。", { confirm = false }, {
-            if (account.unsignContract()) { version += 1; onNotice("已解约") } else onNotice("当前没有生效的合约")
-            confirm = false
-        }, "解约")
-        else ActionButton("解除自动续费", true) { confirm = true }
-    } else {
-        Empty("没有自动续费", "签约后到期会按月续，随时可以解约")
-        ActionButton("签约${plan.name}", true) {
-            account.signContract("local", plan.name, plan.money, "下月同日")
-            version += 1
-            onNotice("已签约 ${plan.name}")
-        }
-    }
+private fun UnknownPage(onBack: () -> Unit) {
+    BackHeader("页面不存在", onBack)
+    Text("这个入口没有对应页面。请返回后重新选择。", color = LocalPalette.current.textSecondary)
+    ActionButton("返回", true, onBack)
 }
 
 /** 老用户迁移：只给本机账本打标记，不删除任何账单，重复执行不改时间。 */

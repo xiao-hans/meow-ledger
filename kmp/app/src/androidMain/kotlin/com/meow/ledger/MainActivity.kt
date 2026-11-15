@@ -98,13 +98,11 @@ class MainActivity : ComponentActivity() {
 
             override fun openTicket(): String = "已打开票据识别，选图或粘贴文本后结果只进待确认队列。"
 
-            /** 支付回调：只解析结果参数，展示本地订单/会员状态，不假装支付成功。 */
+            /** 旧版支付回调：只记录状态说明，不识别订单或会员权益。 */
             override fun openPaymentCallback(result: String): String {
                 val status = com.meow.ledger.shared.auto.paymentStatusOf(result)
                 runCatching {
-                    com.meow.ledger.shared.manage.AccountRepository(
-                        com.meow.ledger.ui.AppGraph.database,
-                    ).track("ac_pay_callback", result.take(200))
+                    Unit
                 }
                 return status
             }

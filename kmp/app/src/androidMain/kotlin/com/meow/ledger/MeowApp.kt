@@ -27,6 +27,7 @@ class MeowApp : Application() {
         val driver = AndroidSqliteDriver(MeowDatabase.Schema, this, "meow_ledger.db")
         val database = MeowDatabase(driver)
         AppGraph.database = database
+        AppGraph.driver = driver
         val settings = SettingsStore(database)
 
         // 隐私门禁：base URL 只来自用户填的 sync_base_url / sync_config_base_url。

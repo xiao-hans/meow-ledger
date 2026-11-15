@@ -165,7 +165,7 @@ private fun MainApp(
         mutableStateOf(
             when (target.kind) {
                 DeepLinkTarget.Kind.SCAN -> "book-join"
-                DeepLinkTarget.Kind.PAYMENT -> "vip"
+                DeepLinkTarget.Kind.PAYMENT -> ""
                 DeepLinkTarget.Kind.WEBVIEW -> "help"
                 else -> ""
             },
@@ -173,13 +173,12 @@ private fun MainApp(
     }
     var captureSource by rememberSaveable { mutableStateOf("") }
     var captureMessage by rememberSaveable { mutableStateOf<String?>(null) }
-    // 支付回调的状态与订单号一起显示在会员页，用户可自行核对，绝不冒充支付成功。
+    // 外部支付回调不再进入付费功能；只作为一条普通提示展示。
     var paymentNotice by rememberSaveable {
         mutableStateOf(
             if (target.kind == DeepLinkTarget.Kind.PAYMENT) {
                 val order = target.clientId
-                val prefix = if (order.isBlank()) "" else "订单 $order："
-                prefix + paymentStatusOf(target.paymentResult)
+                paymentStatusOf(target.paymentResult)
             } else {
                 ""
             },
@@ -449,9 +448,8 @@ private fun applyTarget(
         DeepLinkTarget.Kind.SCAN -> { setTab(3); setMinePage("book-join") }
         DeepLinkTarget.Kind.PAYMENT -> {
             setTab(3)
-            setMinePage("vip")
-            val prefix = if (target.clientId.isBlank()) "" else "订单 ${target.clientId}："
-            setPaymentNotice(prefix + paymentStatusOf(target.paymentResult))
+            setMinePage("")
+            setPaymentNotice(paymentStatusOf(target.paymentResult))
         }
         DeepLinkTarget.Kind.WEBVIEW -> { setTab(3); setMinePage("help") }
         DeepLinkTarget.Kind.PERMISSION, DeepLinkTarget.Kind.MAIN -> {
@@ -547,7 +545,7 @@ private fun MinePages(
         page.startsWith("budget") -> BudgetPage(BudgetRepository(database), month, page, onOpen, onBack)
         page == "search" -> SearchPage(ExchangeRepository(database), onOpenBill, onBack)
         page == "batch" -> BatchPage(onBack)
-        page == "export" || page.startsWith("import") -> ExchangePage(ExchangeRepository(database), AccountRepository(database), page, onOpen, onBack)
+        page == "export" || page == "import" || page.startsWith("import:") -> ExchangePage(ExchangeRepository(database), AccountRepository(database), page, onOpen, onBack)
         page.startsWith("book") -> BooksPage(BookRepository(database), page, onOpen, onBack)
         page.startsWith("asset") -> AssetsPage(AssetRepository(database), page, onOpen, onBack)
         page.startsWith("categor") || page.startsWith("tag") -> CatalogPage(CatalogRepository(database), page, onOpen, onBack)

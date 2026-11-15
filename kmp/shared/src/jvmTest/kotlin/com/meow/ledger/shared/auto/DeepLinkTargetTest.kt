@@ -142,13 +142,13 @@ class DeepLinkTargetTest {
 
     @Test
     fun paymentStatusNeverClaimsSuccessForMissingResult() {
-        assertEquals("支付成功，会员权益与订单状态已更新", paymentStatusOf("0"))
-        assertEquals("支付成功，会员权益与订单状态已更新", paymentStatusOf("success"))
-        assertEquals("支付已取消，订单未生效", paymentStatusOf("cancel"))
-        assertEquals("支付未完成，请重试或联系客服", paymentStatusOf("fail"))
-        assertEquals("支付结果待确认，请稍后在会员页查看订单状态", paymentStatusOf(null))
-        assertEquals("支付结果待确认，请稍后在会员页查看订单状态", paymentStatusOf(""))
-        assertEquals("支付结果待确认，请稍后在会员页查看订单状态", paymentStatusOf("pending"))
-        assertEquals("收到支付回调（weird），请在会员页核对订单状态", paymentStatusOf("weird"))
+        assertEquals("收到旧版支付回调；本版全部功能已免费解锁", paymentStatusOf("0"))
+        assertEquals("收到旧版支付回调；本版全部功能已免费解锁", paymentStatusOf("success"))
+        assertEquals("收到旧版支付回调；无需付款", paymentStatusOf("cancel"))
+        assertEquals("收到旧版支付回调；无需付款", paymentStatusOf("fail"))
+        assertEquals("收到旧版支付回调；全部功能已免费解锁", paymentStatusOf(null))
+        assertEquals("收到旧版支付回调；全部功能已免费解锁", paymentStatusOf(""))
+        assertEquals("收到旧版支付回调；全部功能已免费解锁", paymentStatusOf("pending"))
+        assertEquals("收到旧版支付回调（weird）；全部功能已免费解锁", paymentStatusOf("weird"))
     }
 }

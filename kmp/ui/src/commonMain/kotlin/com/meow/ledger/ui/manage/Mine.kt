@@ -21,8 +21,7 @@ import com.meow.ledger.ui.theme.LocalPalette
 @Composable
 fun MineHome(profile: Member_profile, onOpen: (String) -> Unit) {
     val palette = LocalPalette.current
-    val name = profile.nickname.ifBlank { "未登录" }
-    val vip = if (profile.vip == 1L) "会员" else "普通用户"
+    val name = profile.nickname.ifBlank { "本机账本" }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -31,9 +30,9 @@ fun MineHome(profile: Member_profile, onOpen: (String) -> Unit) {
         GlassCard(onClick = { onOpen("account") }) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(name, color = palette.textPrimary, fontWeight = FontWeight.Medium)
-                Text(vip, color = palette.textSecondary)
+                Text("全部功能已解锁", color = palette.textSecondary)
             }
-            Text(profile.phone.ifBlank { "登录后可以同步账本" }, color = palette.textSecondary, modifier = Modifier.padding(top = 4.dp))
+            Text(profile.phone.ifBlank { "数据保存在本机，可备份和恢复" }, color = palette.textSecondary, modifier = Modifier.padding(top = 4.dp))
         }
         entries.forEach { (key, title, hint) ->
             GlassCard(onClick = { onOpen(key) }) {
@@ -49,6 +48,7 @@ private val entries = listOf(
     Triple("search", "搜索", "按备注、分类、金额找账单"),
     Triple("batch", "批量修改", "选中账单一起改分类"),
     Triple("export", "导出", "复制全部账单的 CSV"),
+    Triple("backup", "备份与恢复", "导出全库备份，或导入自己的备份"),
     Triple("books", "账本", "新建、共享、成员"),
     Triple("assets", "资产", "账户余额和隐藏账户"),
     Triple("categories", "分类与标签", "支出、收入分类和标签"),
@@ -57,9 +57,8 @@ private val entries = listOf(
     Triple("save-plans", "存钱计划", "目标和已存金额"),
     Triple("imports", "导入账单", "记录导入过的文件"),
     Triple("widgets", "小组件", "本地预览，不挂系统桌面"),
-    Triple("vip", "会员", "开通和订单"),
     Triple("change-phone", "换绑手机", "旧号和新号都要验证"),
-    Triple("contract", "自动续费", "签约、解约和老用户迁移"),
+    Triple("migration", "老用户数据迁移", "标记本机旧版账本，不删除账单"),
     Triple("feedback", "反馈", "问题和联系方式"),
     Triple("lock", "应用锁", "四位口令"),
     Triple("help", "帮助与协议", "使用说明和关于"),

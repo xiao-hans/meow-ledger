@@ -6,13 +6,22 @@ import androidx.compose.ui.Modifier
 /**
  * 平台文件桥。
  * - ImportCsvButton：选一个 CSV/文本文件，把名字和内容交给 onPicked。
+ * - ImportBackupButton：选一个 JSON 备份文件，把名字和内容交给 onPicked。
  * - shareTextFile：把文本写成文件并发起系统分享，返回是否发起成功。
+ * - copyText：把文本放进系统剪贴板。
  * OCR 引擎未接入时 platformOcrName 为空，页面只提供手动与粘贴入口。
  */
 @Composable
 expect fun ImportCsvButton(enabled: Boolean, modifier: Modifier = Modifier, onPicked: (name: String, content: String) -> Unit)
 
+@Composable
+expect fun ImportBackupButton(enabled: Boolean, modifier: Modifier = Modifier, onPicked: (name: String, content: String) -> Unit)
+
 expect fun shareTextFile(name: String, content: String): Boolean
+
+expect fun copyText(text: String): Boolean
+
+expect fun nowBackupName(): String
 
 expect val platformOcrName: String?
 

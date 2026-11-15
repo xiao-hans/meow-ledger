@@ -60,7 +60,7 @@ interface EntryHost {
     /** 票据识别：确认 OCR 引擎可用并返回状态；真正的选图在 OcrPage。 */
     fun openTicket(): String
 
-    /** 支付回调：解析结果并核对本地订单，返回给用户看的中文状态。 */
+    /** 旧版支付回调：只返回状态说明，不打开付费页面。 */
     fun openPaymentCallback(result: String): String
 
     /** 启动 MediaProjection 截屏采集；拒绝或组件缺失时返回兜底文案。 */

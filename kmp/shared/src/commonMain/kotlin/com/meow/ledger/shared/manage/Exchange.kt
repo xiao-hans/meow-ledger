@@ -28,6 +28,43 @@ data class ImportRow(
     val desc: String,
 )
 
+/** 样本 App 的导出表头（apktool_out/res/values/arrays.xml）。 */
+private val SAMPLE_HEAD = listOf("类型", "分类", "时间", "金额", "账户", "账本", "标签", "记账人", "备注")
+private val SAMPLE_HEAD_REFUND = SAMPLE_HEAD + "已退款金额"
+
+/** 样本 CSV 是否已按证据列登记。仅识别表头，不猜任意文件。 */
+fun isSampleCsv(text: String): Boolean {
+    val first = text.removePrefix("\ufeff").lineSequence().firstOrNull { it.isNotBlank() } ?: return false
+    val head = splitCsv(first).map { it.trim() }
+    return head.take(SAMPLE_HEAD.size) == SAMPLE_HEAD
+}
+
+/** 解析样本 App 导出的 CSV；时间 yyyy/MM/dd HH:mm，金额按元文本保留。 */
+fun parseSampleCsv(text: String): List<ImportRow> {
+    val lines = text.removePrefix("\ufeff").split('\n').map { it.trimEnd('\r') }.filter { it.isNotBlank() }
+    if (lines.isEmpty()) return emptyList()
+    val head = splitCsv(lines.first()).map { it.trim() }
+    if (head.take(SAMPLE_HEAD.size) != SAMPLE_HEAD) return emptyList()
+    return lines.drop(1).mapNotNull { line ->
+        val cells = splitCsv(line)
+        val day = sampleDay(cells.getOrElse(2) { "" }) ?: return@mapNotNull null
+        ImportRow(
+            day = day,
+            type = typeOf(cells.getOrElse(0) { "" }),
+            category = cells.getOrElse(1) { "" },
+            money = cells.getOrElse(3) { "" }.trim(),
+            desc = cells.getOrElse(8) { "" },
+        )
+    }
+}
+
+private fun sampleDay(text: String): Long? {
+    val value = text.trim()
+    val digits = value.filter { it.isDigit() }
+    if (digits.length < 8) return null
+    return digits.take(8).toLongOrNull()
+}
+
 class ExchangeRepository(private val db: MeowDatabase) {
 
     /** 全部账单，导出和搜索都从这里取。 */
@@ -75,7 +112,7 @@ class ExchangeRepository(private val db: MeowDatabase) {
      * 金额、日期解析不了的行计入 skipped。
      */
     fun importCsv(text: String, source: Long = SOURCE_IMPORT, today: Long = 0): ImportOutcome {
-        val rows = parseCsv(text)
+        val rows = if (isSampleCsv(text)) parseSampleCsv(text) else parseCsv(text)
         return importRows(rows, source, today)
     }
 
@@ -156,7 +193,7 @@ internal fun parseCsv(text: String): List<ImportRow> {
     }
 }
 
-private fun splitCsv(line: String): List<String> {
+internal fun splitCsv(line: String): List<String> {
     val cells = mutableListOf<String>()
     val current = StringBuilder()
     var quoted = false

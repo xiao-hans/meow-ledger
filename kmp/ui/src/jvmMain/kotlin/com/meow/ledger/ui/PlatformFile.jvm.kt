@@ -25,7 +25,20 @@ actual fun ImportCsvButton(
     Button(onClick = {}, enabled = false, modifier = modifier) { Text("选择 CSV 文件") }
 }
 
+@Composable
+actual fun ImportBackupButton(
+    enabled: Boolean,
+    modifier: Modifier,
+    onPicked: (name: String, content: String) -> Unit,
+) {
+    Button(onClick = {}, enabled = false, modifier = modifier) { Text("选择备份文件") }
+}
+
 actual fun shareTextFile(name: String, content: String): Boolean = false
+
+actual fun copyText(text: String): Boolean = false
+
+actual fun nowBackupName(): String = "local"
 
 actual val platformOcrName: String? = null
 

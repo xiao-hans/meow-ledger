@@ -10,7 +10,7 @@ data class DeepLinkTarget(
     val clientId: String = "",
     /** webview 深链带的网址；无参数时为空，由入口用默认帮助页兜底。 */
     val url: String = "",
-    /** 微信支付回调的原始结果串，供入口解析后展示订单/会员状态。 */
+    /** 旧版支付回调的原始结果串；仅用于兼容性说明。 */
     val paymentResult: String = "",
     /**
      * webview 深链的 url 是否通过了域名白名单校验。
@@ -140,9 +140,9 @@ fun isAllowedWebViewUrl(rawUrl: String): Boolean {
 
 /** 支付回调的原始结果 → 给用户看的中文状态。缺失或非法一律按「未完成」处理，不假装成功。 */
 fun paymentStatusOf(result: String?): String = when (result?.trim()?.lowercase()) {
-    "0", "ok", "success", "successful" -> "支付成功，会员权益与订单状态已更新"
-    "cancel", "cancelled", "-2" -> "支付已取消，订单未生效"
-    "fail", "failed", "error", "-1" -> "支付未完成，请重试或联系客服"
-    null, "", "pending", "unknown" -> "支付结果待确认，请稍后在会员页查看订单状态"
-    else -> "收到支付回调（$result），请在会员页核对订单状态"
+    "0", "ok", "success", "successful" -> "收到旧版支付回调；本版全部功能已免费解锁"
+    "cancel", "cancelled", "-2" -> "收到旧版支付回调；无需付款"
+    "fail", "failed", "error", "-1" -> "收到旧版支付回调；无需付款"
+    null, "", "pending", "unknown" -> "收到旧版支付回调；全部功能已免费解锁"
+    else -> "收到旧版支付回调（$result）；全部功能已免费解锁"
 }

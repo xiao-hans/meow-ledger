@@ -1,5 +1,7 @@
 package com.meow.ledger.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -28,6 +30,9 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 actual fun ImportCsvButton(
@@ -52,6 +57,41 @@ actual fun ImportCsvButton(
         modifier = modifier,
     ) { Text("选择 CSV 文件") }
 }
+
+
+@Composable
+actual fun ImportBackupButton(
+    enabled: Boolean,
+    modifier: Modifier,
+    onPicked: (name: String, content: String) -> Unit,
+) {
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val content = runCatching {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                input.readBytes().toString(Charsets.UTF_8)
+            }
+        }.getOrNull().orEmpty()
+        onPicked(queryName(context, uri), content)
+    }
+    Button(
+        onClick = { launcher.launch(arrayOf("application/json", "text/plain", "text/*", "application/octet-stream")) },
+        enabled = enabled,
+        modifier = modifier,
+    ) { Text("选择备份文件") }
+}
+
+actual fun copyText(text: String): Boolean = try {
+    val manager = AndroidHost.appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    manager.setPrimaryClip(ClipData.newPlainText("喵啊记账备份", text))
+    true
+} catch (_: Exception) {
+    false
+}
+
+actual fun nowBackupName(): String =
+    SimpleDateFormat("yyyyMMdd-HHmmss", Locale.CHINA).format(Date())
 
 private fun queryName(context: Context, uri: Uri): String {
     context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
