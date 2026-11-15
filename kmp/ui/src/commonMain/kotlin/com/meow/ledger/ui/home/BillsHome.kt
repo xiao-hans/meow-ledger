@@ -3,7 +3,6 @@ package com.meow.ledger.ui.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -153,11 +152,9 @@ fun BillsHome(
         }
 
         Row(
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(start = 18.dp, end = 18.dp, top = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(9.dp),
+            Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             FILTERS.forEachIndexed { index, label ->
                 Chip(label, selected = index == filter) { filter = index }
