@@ -76,6 +76,33 @@ status: W1.1–W1.4 完成；下一切片 W2.1
 - [x] 计数类 `WidgetPreview.firstMoney/secondMoney=false`，不按金额格式化
 - [x] `WidgetConfigTest` 覆盖 7 种、绑定/重配/解绑、计数语义；246 用例 + `assembleDebug` + `checkAdDeps` 绿
 
+## W2.3 登录与推送网关沙箱
+
+状态：完成（`ef01067`）。
+
+- [x] `LoginGateway` + `SandboxLoginGateway`：6 位码、5 分钟有效，验证码只留本机
+- [x] `AccountRepository(db, sync, login)` 可换网关；`loginByPhone` / 换绑都走 `verify`
+- [x] `PushGateway` + `SandboxPushGateway`：`remote=false`，`register()` 明确失败，不伪装可用
+- [x] `AccountTest` 覆盖网关替换与沙箱不可用；248 用例 + `assembleDebug` + `checkAdDeps` 绿
+
+## W2.4 票据缩略图渲染
+
+状态：完成（`d46de72`）。
+
+- [x] `TicketThumb` expect/actual：Android 降采样 + 44dp 圆角裁切，JVM 同尺寸占位
+- [x] 待确认列表最多展示 3 张缩略图，保留「有图 N」
+- [x] `MeowApp` pending 分支只查一次事件列表；248 用例 + `assembleDebug` + `checkAdDeps` 绿
+
+## W3.0 仪器测试与应用启动补列
+
+状态：完成代码与构建（`188b002`）；真机执行结果见下。
+
+- [x] `androidInstrumentedTest` + `AndroidJUnitRunner`；3 个用例：启动、迁移后列存在、深链解析
+- [x] 真机复现启动崩溃：历史构建给 `fixed_bill` 加 `not_in_budget` 却没写迁移，版本号已到新值
+- [x] `SchemaRepair`：打开库后按列名幂等补列，先于任何仓储查询执行
+- [ ] vivo V2419A 执行 `connectedDebugAndroidTest`（需在手机上允许安装）
+- [x] `:shared:jvmTest :app:assembleDebug :app:assembleDebugAndroidTest checkAdDeps` 绿
+
 ## W2 / W3 / W4
 
 见 design §1–§5；本文件按切片追加验证记录与提交号。
@@ -90,5 +117,8 @@ status: W1.1–W1.4 完成；下一切片 W2.1
 | W1.4 | `308d4ef` | 243 用例 + assembleDebug + checkAdDeps 绿 |
 | W2.1 | `a5b5e02` | 243 用例 + assembleDebug + checkAdDeps 绿 |
 | W2.2 | `a93fc2f` | 246 用例 + assembleDebug + checkAdDeps 绿 |
+| W2.3 | `ef01067` | 248 用例 + assembleDebug + checkAdDeps 绿 |
+| W2.4 | `d46de72` | 248 用例 + assembleDebug + checkAdDeps 绿 |
+| W3.0 | `188b002` | jvmTest + assembleDebug + assembleDebugAndroidTest + checkAdDeps 绿；真机执行待安装确认 |
 | W1.3 | `1959120` | jvmTest 239 + assembleDebug + checkAdDeps 绿 |
 | W1.4 | `308d4ef` | jvmTest 243 + assembleDebug + checkAdDeps 绿 |
