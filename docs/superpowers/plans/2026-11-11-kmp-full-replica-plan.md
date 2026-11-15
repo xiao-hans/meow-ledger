@@ -147,6 +147,18 @@ ad_free: 不接入广告 SDK，不调用广告请求端点
 
 完成依据：差距表不存在「未实现」「待证据」项；每个模块有真机或自动化测试证据；所有构建命令有完整输出记录。
 
+## S10 · 权限申请与跨品牌系统设置
+
+状态：完成（本提交；代码 + Gradle + vivo V2419A 真机权限门截图，其它品牌私有页待设备）。
+
+1. 删除本版无账号登录却申请不到的 `READ_SMS` / `RECEIVE_SMS`，常用运行时权限按 API 级别与相机硬件过滤。
+2. 补齐 Manifest 能力：悬浮窗、电池优化、振动、旧版生物识别与 `maxSdkVersion=32` 的存储权限；新增电池优化白名单状态。
+3. 生物识别改为检查系统是否已登记凭据，未登记时显示原因并允许跳过；每项系统权限展示具体用途与设置路径说明。
+4. `openSettings` 改为标准 Action → vivo/iQOO、小米/Redmi、OPPO/OnePlus/realme、华为/荣耀、三星私有页 → 应用详情页逐层兜底，所有跳转 `runCatching`，不因 ROM 缺少页面崩溃。
+5. 验证：`:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL；vivo V2419A 安装冷启动无 FATAL，权限门显示 3 项已开启 + 3 项未开启及「去设置」按钮与原因。
+
+完成依据：权限门不再包含申请不到的高敏权限；不同品牌至少有可操作入口或明确不支持原因；完整授权刷新与通知监听/无障碍/截屏链路仍需各品牌真机。
+
 ## 每个切片的提交记录
 
 | 切片 | 提交号 | 构建结果 | 真机结果 | 差距表状态 |
@@ -161,5 +173,6 @@ ad_free: 不接入广告 SDK，不调用广告请求端点
 | S7 | 同 S6 | Operation/Behavior/Config/PersonCenter 5 契约 + catalog 112 断言绿 | — | 完成 |
 | S8 | `2a8c806` | 118 tests 0 fail；埋点三类落库 E2E（ac_add_bill×2 入库实证） | 模拟器记账保存+埋点；imePadding 键盘遮挡修复后回归截图 | 完成 |
 | S9（免费解锁与数据迁移） | 本提交 | `:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL；`git diff --check` 通过；BackupTest/SampleCsvTest 覆盖全库备份与样本 CSV | vivo V2419A 真机：Mine 显示「全部功能已解锁」，备份页导出 JSON 成功（含 4 笔账与分类）、无红色失败提示 | 完成（恢复/文件选择待人工） |
+| S10（权限申请与跨品牌适配） | 本提交 | `:shared:jvmTest :app:assembleDebug` BUILD SUCCESSFUL；`git diff --check` 通过 | vivo V2419A 真机：冷启动权限门文案/去设置按钮/不支持原因/已开启状态截图，启动无 FATAL | 完成（其它品牌真机待验） |
 
 > **实测基线（2026-11-12 状态对账时补记）**：`origin/master` 上的 `:shared:jvmTest` = **139 tests / 0 failures**，`:app:assembleDebug` = **BUILD SUCCESSFUL**；环境 JDK 17.0.21 + Gradle 8.11.1（wrapper jar 方式，无 `gradlew` 脚本）。上表各切片的「96 / 100 / 113 / 116 / 118 tests」是当时提交记录里的历史数字，与最新基线口径不同，不要累加或当成当前值；本次对账未逐个重跑历史提交。三个先于状态对账 PR 合并的分支各自报告的测试数：PR #3 `fix/network-contract` 174 用例、PR #2 `fix/db-migration-v3` 145 用例、PR `fix/interaction-discipline` 新增 `AutoBatchConfirmTest` / `ClearLocalDataTest`（各分支独立口径，合并后以 CI 实测为准）。

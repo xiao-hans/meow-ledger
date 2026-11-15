@@ -73,6 +73,9 @@ data class PermissionItem(
     val purpose: String,
     val granted: Boolean,
     val canOpenSettings: Boolean = true,
+    /** false：本机没有对应硬件/系统入口，只展示状态，不骗用户去申请。 */
+    val actionable: Boolean = true,
+    val hint: String = "",
 )
 
 /** 兼容旧引用：App 内帮助页对应的官方地址，与 shared 的白名单常量保持一致。 */
@@ -137,6 +140,7 @@ fun EntryNavHost(
                     },
                     onContinue = { permissionChecked = true },
                     onGuidedSettings = host::startGuidedSettings,
+                    onOpenSettings = host::openSettings,
                 )
             } else {
                 content(initialTarget)
@@ -177,6 +181,7 @@ private fun PermissionGate(
     onRequest: () -> Unit,
     onContinue: () -> Unit,
     onGuidedSettings: () -> Unit,
+    onOpenSettings: (String) -> Unit,
 ) {
     val palette = LocalPalette.current
     Column(
@@ -188,7 +193,7 @@ private fun PermissionGate(
     ) {
         Text("进入账本前", color = palette.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Text(
-            "权限按功能单独开启。拒绝后仍可手工记账，相关自动功能会明确标注。",
+            "常用权限集中申请；系统专属权限逐项去设置。拒绝后仍可手工记账，不支持的项会写清原因。",
             color = palette.textSecondary,
             fontSize = 13.sp,
         )
@@ -205,9 +210,21 @@ private fun PermissionGate(
                     Text(item.label, color = palette.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                     Text(item.purpose, color = palette.textSecondary, fontSize = 12.sp)
                     Text(
-                        if (item.granted) "已开启" else "未开启",
-                        color = if (item.granted) palette.textSecondary else palette.danger,
+                        if (item.granted) "已开启" else if (!item.actionable) "本机不支持" else "未开启",
+                        color = if (item.granted) palette.textSecondary else if (item.actionable) palette.danger else palette.textSecondary,
                         fontSize = 12.sp,
+                    )
+                    if (!item.granted && item.hint.isNotEmpty()) {
+                        Text(item.hint, color = palette.textSecondary, fontSize = 11.sp)
+                    }
+                }
+                if (!item.granted && item.actionable && item.canOpenSettings) {
+                    Text(
+                        "去设置",
+                        color = palette.brand,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable { onOpenSettings(item.key) },
                     )
                 }
             }

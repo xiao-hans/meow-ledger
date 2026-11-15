@@ -57,7 +57,7 @@ class MainActivity : ComponentActivity() {
 
             override fun startGuidedSettings() {
                 guidedKeys = gateway.statuses()
-                    .filter { !it.granted && it.settingsAction != null }
+                    .filter { !it.granted && it.actionable }
                     .map { it.key }
                 guidedIndex = 0
                 openNextGuidedSetting()
@@ -157,7 +157,9 @@ class MainActivity : ComponentActivity() {
             label = getString(status.labelRes),
             purpose = status.purpose,
             granted = status.granted,
-            canOpenSettings = status.settingsAction != null,
+            canOpenSettings = status.actionable,
+            actionable = status.actionable,
+            hint = status.hint,
         )
 
     /** 显式 EXTRA_ROUTE（磁贴、通知）与 meowledger:// 深链共用一套目标解析。 */
