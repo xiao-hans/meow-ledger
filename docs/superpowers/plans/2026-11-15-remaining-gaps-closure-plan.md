@@ -60,4 +60,4 @@ status: W1.1–W1.3 完成；下一切片 W1.4
 |---|---|---|
 | W1.1 | `ca3d62e` | MigrationTest --rerun-tasks 绿 |
 | W1.2 | `6d353fe` | jvmTest + assembleDebug + checkAdDeps 绿 |
-| W1.3 | 待填（本提交） | jvmTest 239 + assembleDebug + checkAdDeps 绿 |
+| W1.3 | `1959120` | jvmTest 239 + assembleDebug + checkAdDeps 绿 |
