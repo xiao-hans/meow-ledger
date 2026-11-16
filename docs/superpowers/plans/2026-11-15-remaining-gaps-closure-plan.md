@@ -121,6 +121,14 @@ status: W1.1–W1.4 完成；下一切片 W2.1
 - 修复：保存/删除周期账后立刻 `rescheduleReminders`（原先只在 App 启动与开机重排）；页面文案从「到期只提醒」改为「到期自动写入账单」
 - 限制：模拟器无法 `adb root` 改系统时间；`exported="false"` 的 `BillAlarmReceiver` 也不接受 shell 广播，验证改走「创建已过时刻的提醒」这条真实路径
 
+### W3.1 追加（2026-11-16 09:20，同日第二轮）
+
+- [x] 生物识别：设备 PIN `1234` + `emu finger touch 1` 录入指纹 → 重启 App 自动弹「解锁喵啊记账」→ 指纹通过直接进主界面；点「用口令」切到四位口令页；口令页点「用指纹 / 面容解锁」再次弹窗并通过
+- [x] 权限拒绝回退：`pm revoke` 掉 `POST_NOTIFICATIONS` / `READ_MEDIA_IMAGES` / `CAMERA` 三项后重启，仍能进主界面并记一笔 77.77（本月支出 1752.54 → 1830.31）
+- [x] OCR 多选与票据图：两张自造票据（星巴克 36.50 / 全家 18.00）多选 → 「已处理 2 张（识别 2 · 无文字 0）」→ 待确认队列两条且「有图 1」
+- 修复：`copyOcrUri` 从 `cacheDir/ocr` 改存 `filesDir/tickets`，并生成 320px 级缩略图写进 `ticket_image.thumb_path`（`134b645`）—— 原来存缓存目录会被系统清掉，`thumb_path` 永远为空
+- 限制：`adb shell input text` 输不进 `#` 和 `&`；深链回调改用 `am start -a android.intent.action.VIEW -d "tencent101983842://auth#access_token=…&openid=…" com.meow.ledger` 投递
+
 ## L1 · QQ 登录（只登录，不注册）
 
 状态：完成。代码、JVM 测试、构建与模拟器验证均已通过。
@@ -168,3 +176,4 @@ status: W1.1–W1.4 完成；下一切片 W2.1
 | L1 | `918a271` | 266 用例 + assembleDebug + checkAdDeps 绿；模拟器走通登录/刷新/退出与地址切换 |
 | W2.2 追加 | `3b6f90a` | 266 用例 + assembleDebug + checkAdDeps 绿；模拟器挂上桌面并随记账刷新 |
 | W3.1 | `fe4395f` | 266 用例 + assembleDebug + checkAdDeps 绿；模拟器走通调拨/组件/提醒通知 |
+| W3.1 追加 | `134b645` | 266 用例 + assembleDebug + checkAdDeps 绿；模拟器走通指纹解锁/口令回退/权限拒绝记账/OCR 多选 |
