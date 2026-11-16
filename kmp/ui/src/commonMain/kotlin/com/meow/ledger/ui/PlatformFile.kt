@@ -25,20 +25,23 @@ expect fun nowBackupName(): String
 
 expect val platformOcrName: String?
 
+/** 选中的票据图：原图路径、缩略图路径（平台生成不了时为空）、识别文本。 */
+data class PickedImage(val path: String, val thumbPath: String = "", val ocrText: String? = null)
+
 /**
- * 选一张票据图，拷贝到本地缓存后把路径交给 onPicked。
+ * 选一张票据图，拷贝到应用私有目录后把路径交给 onPicked。
  * 平台接了 OCR 引擎时同时回传识别文本（ocrText 非空）；没有引擎时 ocrText 为 null，按钮禁用。
  */
 @Composable
 expect fun PickImageButton(enabled: Boolean, modifier: Modifier = Modifier, onPicked: (path: String, ocrText: String?) -> Unit)
 
 /**
- * 一次多选票据图。每张图拷贝到本地后回传 (path, ocrText?)；顺序与系统选择器返回顺序一致。
+ * 一次多选票据图。每张图拷贝到本地后回传 [PickedImage]；顺序与系统选择器返回顺序一致。
  * 没有 OCR 引擎时 ocrText 一律为 null，但仍回传路径，页面可提示「图片已登记」。
  */
 @Composable
 expect fun PickMultipleImagesButton(
     enabled: Boolean,
     modifier: Modifier = Modifier,
-    onPicked: (List<Pair<String, String?>>) -> Unit,
+    onPicked: (List<PickedImage>) -> Unit,
 )

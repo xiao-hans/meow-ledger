@@ -39,12 +39,12 @@ import com.meow.ledger.ui.theme.LocalPalette
  * 2. 结果只进待确认队列，绝不静默入账；
  * 3. 金额、商户都可以在确认前改。
  *
- * onCaptureText(text, imagePath)：粘贴/手动时 imagePath 为空；多选时每张图各调一次。
+ * onCaptureText(text, imagePath, thumbPath)：粘贴/手动时两个路径都为空；多选时每张图各调一次。
  */
 @Composable
 fun OcrPage(
     onBack: () -> Unit,
-    onCaptureText: (text: String, imagePath: String?) -> String,
+    onCaptureText: (text: String, imagePath: String?, thumbPath: String) -> String,
     onOpenPending: () -> Unit,
 ) {
     val palette = LocalPalette.current
@@ -74,13 +74,13 @@ fun OcrPage(
                 val parts = mutableListOf<String>()
                 var ok = 0
                 var bare = 0
-                items.forEach { (path, ocrText) ->
-                    if (ocrText.isNullOrBlank()) {
+                items.forEach { item ->
+                    if (item.ocrText.isNullOrBlank()) {
                         bare += 1
-                        parts += "无文字：" + path.substringAfterLast('/')
+                        parts += "无文字：" + item.path.substringAfterLast('/')
                     } else {
                         ok += 1
-                        parts += onCaptureText(ocrText, path)
+                        parts += onCaptureText(item.ocrText, item.path, item.thumbPath)
                     }
                 }
                 pickedSummary = "已处理 ${items.size} 张（识别 $ok · 无文字 $bare）"
@@ -99,7 +99,7 @@ fun OcrPage(
             )
             Spacer(Modifier.height(10.dp))
             ActionButton("识别文本并加入待确认", pasted.isNotBlank()) {
-                message = onCaptureText(pasted, null)
+                message = onCaptureText(pasted, null, "")
                 pasted = ""
             }
 
@@ -123,7 +123,7 @@ fun OcrPage(
                 "登记为待确认",
                 manualMoney.toDoubleOrNull() != null && manualMerchant.isNotBlank(),
             ) {
-                message = onCaptureText("在" + manualMerchant + "消费¥" + manualMoney, null)
+                message = onCaptureText("在" + manualMerchant + "消费¥" + manualMoney, null, "")
                 manualMoney = ""
                 manualMerchant = ""
             }

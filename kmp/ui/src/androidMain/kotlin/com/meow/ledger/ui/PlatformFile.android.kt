@@ -4,6 +4,8 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -121,14 +123,41 @@ actual val platformOcrName: String? = "ML Kit 中文"
 
 private fun fileShareDir(): File = File(AndroidHost.appContext.cacheDir, "share").apply { mkdirs() }
 
+/**
+ * 把相册图片复制进私有目录。用 filesDir 而不是 cacheDir：
+ * 票据图会被记进账单的 images 字段长期引用，放缓存目录会被系统随时清掉。
+ * 同时生成一张缩略图，列表渲染不必每次解大图。
+ */
 private fun copyOcrUri(context: Context, uri: Uri): String? = runCatching {
-    val dir = File(context.cacheDir, "ocr").apply { mkdirs() }
-    val name = queryName(context, uri).ifBlank { "ticket_${System.currentTimeMillis()}.jpg" }
+    val dir = File(context.filesDir, "tickets").apply { mkdirs() }
+    val raw = queryName(context, uri).ifBlank { "ticket_${System.currentTimeMillis()}.jpg" }
+    val name = "${System.currentTimeMillis()}_$raw"
     val out = File(dir, name)
     context.contentResolver.openInputStream(uri)?.use { input ->
         out.outputStream().use { output -> input.copyTo(output) }
     } ?: return null
+    writeThumb(out)
     out.absolutePath
+}.getOrNull()
+
+/** 原图对应的缩略图路径；生成失败返回空串，渲染时退回原图。 */
+private fun thumbPathOf(original: String): String =
+    File(original).let { File(it.parentFile, it.nameWithoutExtension + ".thumb.jpg") }
+        .takeIf { it.exists() }?.absolutePath.orEmpty()
+
+/** 缩略图写到同目录 `<name>.thumb.jpg`，失败返回 null，不影响原图。 */
+private fun writeThumb(source: File): String? = runCatching {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(source.absolutePath, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sample = 1
+    while (bounds.outWidth / (sample * 2) >= 320) sample *= 2
+    val bitmap = BitmapFactory.decodeFile(source.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })
+        ?: return null
+    val target = File(source.parentFile, source.nameWithoutExtension + ".thumb.jpg")
+    target.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 80, it) }
+    bitmap.recycle()
+    target.absolutePath
 }.getOrNull()
 
 private fun recognizeChinese(
@@ -172,14 +201,14 @@ actual fun PickImageButton(enabled: Boolean, modifier: Modifier, onPicked: (path
 actual fun PickMultipleImagesButton(
     enabled: Boolean,
     modifier: Modifier,
-    onPicked: (List<Pair<String, String?>>) -> Unit,
+    onPicked: (List<PickedImage>) -> Unit,
 ) {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(),
     ) { uris: List<Uri> ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
-        val slots = arrayOfNulls<Pair<String, String?>>(uris.size)
+        val slots = arrayOfNulls<PickedImage>(uris.size)
         var remaining = uris.size
         fun finishOne() {
             remaining -= 1
@@ -193,8 +222,9 @@ actual fun PickMultipleImagesButton(
                 finishOne()
                 return@forEachIndexed
             }
+            val thumb = thumbPathOf(copied)
             recognizeChinese(context, copied) { text ->
-                slots[index] = copied to text
+                slots[index] = PickedImage(copied, thumb, text)
                 finishOne()
             }
         }

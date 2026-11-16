@@ -547,8 +547,10 @@ private fun AutoPages(
         }
         "ocr" -> OcrPage(
             onBack,
-            onCaptureText = { text, imagePath ->
-                captureSummary(auto.captureTicket(text, SOURCE_OCR, imagePath = imagePath))
+            onCaptureText = { text, imagePath, thumbPath ->
+                captureSummary(
+                    auto.captureTicket(text, SOURCE_OCR, imagePath = imagePath, thumbPath = thumbPath),
+                )
             },
             onOpenPending = onOpenPending,
         )

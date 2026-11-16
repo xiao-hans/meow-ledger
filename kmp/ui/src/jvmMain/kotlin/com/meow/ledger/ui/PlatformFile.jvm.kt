@@ -61,7 +61,7 @@ actual fun PickImageButton(enabled: Boolean, modifier: Modifier, onPicked: (path
 actual fun PickMultipleImagesButton(
     enabled: Boolean,
     modifier: Modifier,
-    onPicked: (List<Pair<String, String?>>) -> Unit,
+    onPicked: (List<PickedImage>) -> Unit,
 ) {
     val palette = LocalPalette.current
     Box(
