@@ -75,6 +75,27 @@ class AutoCaptureTest {
         assertEquals(1, r.unsupported)
         assertTrue(repo.pending().isEmpty())
     }
+
+    /**
+     * 截屏 OCR 会把浏览器地址栏一起读进来。`127.0.0.1:8765` 里的 127 曾被当成
+     * 127.00 元入队，域名 `pay.html` 曾被当成商户名。
+     */
+    @Test
+    fun browserAddressBarIsNotMoneyOrMerchant() {
+        val text = "127.0.0.1:8765/pay.html\n微信支付\n支付成功\n¥88.66\n星巴克咖啡"
+        val r = repo.capture(text, "screenshot")
+        assertEquals(1, r.created)
+        val event = repo.pending().single()
+        assertEquals(8866L, event.money)
+        assertEquals("星巴克咖啡", event.merchant)
+    }
+
+    @Test
+    fun urlOnlyTextProducesNothing() {
+        val r = repo.capture("https://example.com/v1.2/order?id=127.0.0.1", "screenshot")
+        assertEquals(0, r.created)
+        assertTrue(repo.pending().isEmpty())
+    }
 }
 
 /** 票据整图：ML Kit 多行文本一次解析，日期数字不误判成金额，商户取全段。 */

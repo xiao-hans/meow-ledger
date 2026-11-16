@@ -66,6 +66,23 @@ val GUIDE_STEPS = listOf(
  */
 private val MONEY_RE = Regex("""(?:[¥￥]|RMB|人民币)\s*(-?\d+(?:\.\d{1,2})?|-?\d+\s*(?:元|块))|-?\d+\.\d{1,2}(?!\d)|-?\d+\s*(?:元|块)(?!\s*[年月日时分秒号折%])""")
 
+/**
+ * 链接先整段剔掉。截屏 OCR 会把浏览器地址栏、通知里的短链一起读进来，
+ * 里面的 `127.0.0.1`、`/v1.2/` 会被 [MONEY_RE] 当成金额，域名也会被当成商户名。
+ */
+private val URL_RE = Regex("""(?:https?://|www\.)\S+""", RegexOption.IGNORE_CASE)
+private val HOST_PORT_RE = Regex("""^[\w.-]*\d[\w.-]*:\d+""")
+private val DOMAIN_RE = Regex("""^[\w.-]+\.[A-Za-z]{2,}(?:/\S*)?$""")
+
+/** 去掉链接、域名与 `host:port` 形式的地址词，避免被当成金额或商户。 */
+private fun stripLinks(text: String): String = text
+    .replace(URL_RE, " ")
+    .split(' ')
+    .filterNot { word ->
+        word.isNotEmpty() && (HOST_PORT_RE.containsMatchIn(word) || DOMAIN_RE.matches(word))
+    }
+    .joinToString(" ")
+
 private val NOISE_RE = Regex("[\u652f\u4ed8\u6210\u529f\u4ed8\u6b3e\u6210\u529f\u5df2\u652f\u4ed8\u6536\u6b3e\u6210\u529f\u5df2\u6536\u6b3e\u4ea4\u6613\u6210\u529f\u6d88\u8d39\u652f\u51fa\u6536\u5165\u5230\u8d26\u8f6c\u8d26\u8ba2\u5355\u8d26\u5355\u60a8\u4f60\u5df2\u6210\u529f\u91d1\u989d\u4f59\u989d\u672c\u6b21\u5b8c\u6210\u4eba\u6c11\u5e01\u5143\u6574\uff1a:\u00b7,\uff0c\u3002!\uff01\\s]")
 
 /** 解析结果。没有有效金额时为 null。 */
@@ -76,9 +93,12 @@ data class Parsed(
     val sourceApp: String,
 )
 
+/** 取不到商户时的占位。多行文本按行解析后用它判断要不要回退到整段结果。 */
+const val UNKNOWN_MERCHANT = "未识别商户"
+
 /** 从原始文本提取金额、商户与收支方向。带货币符号或单位的金额优先。 */
 fun parseRaw(raw: String, source: String, preferAfterMoney: Boolean = false): Parsed? {
-    val text = raw.replace(Regex("\\s+"), " ").trim()
+    val text = stripLinks(raw.replace(Regex("\\s+"), " ").trim())
     if (text.isEmpty()) return null
     var best: Pair<Long, Int>? = null
     for (m in MONEY_RE.findAll(text)) {
@@ -116,7 +136,7 @@ private fun extractMerchant(text: String, preferAfterMoney: Boolean = false): St
     val cleaned = text.replace(MONEY_RE, " ").replace(NOISE_RE, " ").replace(Regex("[\\[\\]()\uff08\uff09\u3010\u3011\"'`]") , " ").trim()
     return cleaned.split(Regex("[\\s,\uff0c\u3002;\uff1b|/]+"))
         .firstOrNull { it.length in 2..18 && !it.all(Char::isDigit) }
-        ?: "未识别商户"
+        ?: UNKNOWN_MERCHANT
 }
 
 /** 最长关键词优先。没有命中返回 null。 */
@@ -190,8 +210,16 @@ class AutoRepository(private val db: MeowDatabase, private val sync: SyncEngine?
         var duplicate = 0
         var unsupported = 0
         val rules = rules()
+        // 整段解析只做一次：截屏与票据的商户名常单独占一行、排在金额行下面，
+        // 逐行解析时那一行没有金额，名字就丢了。这里按「金额之后第一个像名字的词」补回来。
+        val wholeText = if (segments.size > 1) parseRaw(rawText, source, preferAfterMoney = true) else null
         for (seg in segments) {
-            val parsed = parseRaw(seg, source)
+            val lineParsed = parseRaw(seg, source)
+            val parsed = when {
+                lineParsed == null -> null
+                lineParsed.merchant == UNKNOWN_MERCHANT && wholeText != null -> lineParsed.copy(merchant = wholeText.merchant)
+                else -> lineParsed
+            }
             if (parsed == null) { unsupported++; continue }
             val full = parsed.copy(sourceApp = sourceApp)
             val hash = dedupKey(full.sourceApp, full.money, occurredAt, full.merchant)
