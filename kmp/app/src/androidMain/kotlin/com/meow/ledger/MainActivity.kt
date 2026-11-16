@@ -249,6 +249,11 @@ class MainActivity : ComponentActivity() {
                 com.meow.ledger.platform.AppWidgetReceiver.refresh(this@MainActivity)
             }
 
+            /** 周期账增删改后重建闹钟；不重建就要等下次启动才生效。 */
+            override fun rescheduleReminders() {
+                runCatching { com.meow.ledger.platform.RemindScheduler.scheduleAll(this@MainActivity) }
+            }
+
             /** 平台 BiometricPrompt 只在 API 28+ 可用；26–27 直接回退口令。 */
             override fun biometricAvailable(): Boolean =
                 if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.P) {

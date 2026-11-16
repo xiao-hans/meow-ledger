@@ -52,7 +52,7 @@ private val entries = listOf(
     Triple("books", "账本", "新建、共享、成员"),
     Triple("assets", "资产", "账户余额和隐藏账户"),
     Triple("categories", "分类与标签", "支出、收入分类和标签"),
-    Triple("fixed", "周期账", "到期只提醒，不自动入账"),
+    Triple("fixed", "周期账", "到期自动入账，可加到期提醒"),
     Triple("installments", "分期", "每期金额和还款日"),
     Triple("save-plans", "存钱计划", "目标和已存金额"),
     Triple("imports", "导入账单", "记录导入过的文件"),

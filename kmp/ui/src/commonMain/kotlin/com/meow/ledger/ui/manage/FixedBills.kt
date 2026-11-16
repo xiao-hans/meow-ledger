@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.meow.ledger.shared.bills.centsToYuan
 import com.meow.ledger.shared.bills.toCents
 import com.meow.ledger.shared.manage.CYCLE_MONTH
+import com.meow.ledger.ui.AppGraph
 import com.meow.ledger.shared.manage.CYCLE_WEEK
 import com.meow.ledger.shared.manage.CYCLE_YEAR
 import com.meow.ledger.shared.manage.FixedBillRepository
@@ -27,7 +28,7 @@ import com.meow.ledger.ui.theme.LocalPalette
 
 private val CYCLES = listOf(CYCLE_MONTH.toLong() to "每月", CYCLE_WEEK.toLong() to "每周", CYCLE_YEAR.toLong() to "每年")
 
-/** 周期账：fixed / fixed-new / fixed-edit:<id>。到期只提醒，不静默入账。 */
+/** 周期账：fixed / fixed-new / fixed-edit:<id>。到期自动入账（source=5，幂等），另可加提醒。 */
 @Composable
 fun FixedBillsPage(repository: FixedBillRepository, page: String, onOpen: (String) -> Unit, onBack: () -> Unit) {
     var notice by remember { mutableStateOf("") }
@@ -51,7 +52,7 @@ private fun FixedList(repository: FixedBillRepository, onOpen: (String) -> Unit,
     val rows = remember(version) { repository.all() }
     val due = remember(version) { repository.due() }
     BackHeader("周期账", onBack)
-    Text("到期只提醒，不会自动写入账单。确认后到记一笔里入账。", color = palette.textSecondary)
+    Text("到期自动写入账单（来源记为「周期」），同一期只入一次；开启提醒还会在到期日通知。", color = palette.textSecondary)
     if (due.isNotEmpty()) {
         Text("今天该提醒", color = palette.textPrimary, modifier = Modifier.padding(top = 12.dp))
         due.forEach { reminder ->
@@ -117,12 +118,14 @@ private fun FixedForm(repository: FixedBillRepository, id: String, onBack: () ->
         val saved = repository.save(desc.trim(), amount, billType, cycle.toLong(), dayNumber, false, existing?.id ?: "") ?: return@ActionButton
         repository.remindersOf(saved.id).forEach { repository.deleteReminder(it.id) }
         if (remind) repository.saveReminder(desc.trim(), dayNumber, hourNumber, saved.id)
+        AppGraph.permissionHost?.rescheduleReminders()
         onNotice("周期账已保存")
         onBack()
     }
     if (existing != null) {
         if (confirm) ConfirmBar("删除周期账「${existing.desc}」？已入账的账单不受影响，提醒会一起删掉。", { confirm = false }, {
             repository.delete(existing.id)
+            AppGraph.permissionHost?.rescheduleReminders()
             onBack()
         }, "删除")
         else ActionButton("删除周期账", true) { confirm = true }

@@ -104,6 +104,12 @@ interface EntryHost {
      */
     fun refreshWidgets()
 
+    /**
+     * 重建系统闹钟。周期账的提醒只在 App 启动与开机时排过，
+     * 用户当场新建或改时间后不重排就要等下次启动才生效。
+     */
+    fun rescheduleReminders()
+
     /** 本机是否具备可用的指纹/面容解锁；false 时 UI 不展示入口，只留口令。 */
     fun biometricAvailable(): Boolean
 
