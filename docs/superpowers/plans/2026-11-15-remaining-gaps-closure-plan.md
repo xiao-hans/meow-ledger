@@ -107,7 +107,7 @@ status: W1.1–W1.4 完成；下一切片 W2.1
 
 ## L1 · QQ 登录（只登录，不注册）
 
-状态：代码完成，JVM 测试与构建绿；模拟器验证待执行。
+状态：完成。代码、JVM 测试、构建与模拟器验证均已通过。
 
 依据：`D:\workspace\AHVideo\AH视频_QQ登录接口速查.md`、`AH视频_账号体系登录注册接口文档.md`（用户 2026-11-16 指定）。
 
@@ -120,8 +120,17 @@ status: W1.1–W1.4 完成；下一切片 W2.1
 - [x] `QqLoginRepository`：登录成功才落库并同步 `member_profile`；刷新失败不清会话；退出只清本地
 - [x] UI：`AccountHome` 顶栏 QQ 登录入口 + `qq-login` 子页（授权 / 粘贴回调 / 刷新 / 退出 / AH 地址）
 - [x] 深链：`Kind.QQ_AUTH` + Manifest `tencent101983842` scheme + `EntryHost.openQqAuth`
-- [x] `:shared:jvmTest` 264 用例 0 失败；`:app:assembleDebug`、`checkAdDeps` 绿
-- [ ] 模拟器验证：授权回调解析 → 沙箱登录 → 刷新 → 退出；AH 地址留空/填写两种状态
+- [x] `:shared:jvmTest` 266 用例 0 失败；`:app:assembleDebug`、`checkAdDeps` 绿
+- [x] 模拟器验证（Pixel_9_Pro_API_36，`emulator-5554`，2026-11-16）：
+  - 沙箱登录：`am start -a VIEW -d "tencent101983842://auth#access_token=…&openid=FINALCHECK"` → 页面显示「QQ 用户 FINALC / 账号 FINALCHECK / 用户号 524882 / 登录态有效 / 登录成功」；「我的」页顶部同步变成「QQ 用户 QQOPEN」。
+  - 刷新：「刷新登录态」→「已刷新登录态」（原先与登录共用「登录成功」文案，会让人以为刷新没生效，已改）。
+  - 退出：二次确认「退出登录？只清本机会话，服务端没有登出接口，QQ 那边不受影响。」→「已退出登录」，页面回到未登录态。
+  - AH 地址填写 `http://danmu.bmsp9.xyz` → 真实请求返回 `403 app_auth_token`，页面如实写明「签名算法在样本的 Dart 运行时里，本复刻没有实现」。
+  - AH 地址清空 → 「已切回本机沙箱，之前的会话已清掉」，旧会话不再冒充有效。
+- 模拟器验证中发现并修掉的两个真 bug：
+  1. `QqLoginPage` 固定用 `QqLoginRepository(database)`，忽略 AH 地址设置——填了地址仍走沙箱，界面显示「登录成功」是假的。改为按 `ahAuthClient(database)` 现取。
+  2. 切换服务地址后旧会话仍显示「登录态有效」。改为换地址即 `logout()`，并补回归用例 `clientFollowsBaseUrlSetting`、`validateAhBaseUrlAllowsSampleHostAndRejectsJunk`。
+- 已知边界（如实记录，不算完成）：`app_auth_token` 签名算法在样本 Dart AOT 运行时里，未取到；真实服务端登录必然 `403`，只有拿到合法 `refresh_token` 走 `/auth/refresh` 才能绕过签名（文档 §8.3）。`adb shell input text` 输不进 `#`，模拟器验证改用 `am start` 投递真实回调 intent，不走文本注入。
 
 ## W2 / W3 / W4
 
@@ -140,3 +149,4 @@ status: W1.1–W1.4 完成；下一切片 W2.1
 | W2.3 | `ef01067` | 248 用例 + assembleDebug + checkAdDeps 绿 |
 | W2.4 | `d46de72` | 248 用例 + assembleDebug + checkAdDeps 绿 |
 | W3.0 | `188b002` | jvmTest + assembleDebug + assembleDebugAndroidTest + checkAdDeps 绿；真机 `OK (3 tests)` |
+| L1 | 本次提交 | 266 用例 + assembleDebug + checkAdDeps 绿；模拟器走通登录/刷新/退出与地址切换 |

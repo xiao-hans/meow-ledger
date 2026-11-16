@@ -22,6 +22,7 @@ import com.meow.ledger.shared.manage.QqAuth
 import com.meow.ledger.shared.manage.QqAuthResult
 import com.meow.ledger.shared.manage.QqLoginRepository
 import com.meow.ledger.shared.network.KEY_AH_BASE_URL
+import com.meow.ledger.shared.network.ahAuthClient
 import com.meow.ledger.shared.network.validateAhBaseUrl
 import com.meow.ledger.ui.auto.ActionButton
 import com.meow.ledger.ui.auto.BackHeader
@@ -50,9 +51,11 @@ fun QqLoginPage(
     onNotice: (String) -> Unit,
 ) {
     val palette = LocalPalette.current
-    val repo = remember { QqLoginRepository(database) }
     val scope = rememberCoroutineScope()
     var version by remember { mutableStateOf(0) }
+    // 客户端按当前设置现取：填了 AH 地址就走真实 HTTP，空白走沙箱。
+    // 固定成 `QqLoginRepository(database)` 会让「保存地址」看起来生效、实际仍走沙箱。
+    val repo = remember(version) { QqLoginRepository(database, ahAuthClient(database)) }
     val session = remember(version) { repo.session() }
     var busy by remember { mutableStateOf(false) }
     var paste by remember { mutableStateOf("") }
@@ -68,7 +71,6 @@ fun QqLoginPage(
         busy = false
         result = describe(outcome)
         version += 1
-        if (outcome is AhLoginResult.Success) onNotice("已用 QQ 登录")
     }
 
     // 深链带来的回调串只消费一次；解析失败也要给出可操作的原因。
@@ -100,7 +102,12 @@ fun QqLoginPage(
         ActionButton("刷新登录态", !busy) {
             scope.launch {
                 busy = true
-                result = describe(repo.refreshNow())
+                // 刷新成功与登录成功文案要分开：都写「登录成功」会让人以为刷新没生效。
+                result = when (val outcome = repo.refreshNow()) {
+                    null -> "还没有登录"
+                    is AhLoginResult.Success -> "已刷新登录态"
+                    else -> describe(outcome)
+                }
                 busy = false
                 version += 1
             }
@@ -140,12 +147,22 @@ fun QqLoginPage(
         Text(result, color = palette.textPrimary, modifier = Modifier.padding(top = 8.dp))
     }
 
-    AhBaseSection(settings, ahBase) { version += 1 }
+    AhBaseSection(settings, ahBase, database) { version += 1 }
 }
 
-/** 账号服务地址。空白 = 沙箱；填了才真的联网，登录页必须把这件事写明白。 */
+/**
+ * 账号服务地址。空白 = 沙箱；填了才真的联网，登录页必须把这件事写明白。
+ *
+ * 换地址时清掉本地会话：沙箱发的令牌在真服务端不认，反过来也一样。
+ * 留着旧会话会让页面显示「登录态有效」，而实际下一次请求必然失败。
+ */
 @Composable
-private fun AhBaseSection(settings: SettingsStore, current: String, onSaved: () -> Unit) {
+private fun AhBaseSection(
+    settings: SettingsStore,
+    current: String,
+    database: com.meow.ledger.shared.db.MeowDatabase,
+    onSaved: () -> Unit,
+) {
     val palette = LocalPalette.current
     var draft by remember(current) { mutableStateOf(current) }
     var message by remember { mutableStateOf("") }
@@ -162,8 +179,14 @@ private fun AhBaseSection(settings: SettingsStore, current: String, onSaved: () 
         if (error != null) {
             message = error
         } else {
+            val changed = value != current
             settings.setText(KEY_AH_BASE_URL, value)
-            message = if (value.isEmpty()) "已切回本机沙箱" else "已保存"
+            message = when {
+                !changed -> if (value.isEmpty()) "已切回本机沙箱" else "已保存"
+                value.isEmpty() -> "已切回本机沙箱，之前的会话已清掉"
+                else -> "已保存，之前的会话已清掉"
+            }
+            if (changed) QqLoginRepository(database).logout()
             onSaved()
         }
     }

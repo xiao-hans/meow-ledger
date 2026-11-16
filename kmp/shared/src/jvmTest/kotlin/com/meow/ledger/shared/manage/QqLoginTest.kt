@@ -1,7 +1,12 @@
 package com.meow.ledger.shared.manage
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import com.meow.ledger.shared.auto.SettingsStore
 import com.meow.ledger.shared.db.MeowDatabase
+import com.meow.ledger.shared.network.AH_DEFAULT_BASE
+import com.meow.ledger.shared.network.KEY_AH_BASE_URL
+import com.meow.ledger.shared.network.ahAuthClient
+import com.meow.ledger.shared.network.validateAhBaseUrl
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -208,6 +213,30 @@ class QqLoginTest {
         assertNull(repo.session())
         assertFalse(repo.loggedIn())
         assertEquals("device", AccountRepository(db).profile().login_type)
+    }
+
+    // ------------------------------------------------- 地址开关与客户端选择
+
+    @Test
+    fun clientFollowsBaseUrlSetting() {
+        val db = newDb()
+        // 空白 = 沙箱：没配地址就不该有任何联网客户端。
+        assertTrue(ahAuthClient(db) is SandboxAhAuthClient)
+
+        SettingsStore(db).setText(KEY_AH_BASE_URL, AH_DEFAULT_BASE)
+        assertFalse(
+            ahAuthClient(db) is SandboxAhAuthClient,
+            "填了 AH 地址还走沙箱，等于让用户以为登录了真服务",
+        )
+    }
+
+    @Test
+    fun validateAhBaseUrlAllowsSampleHostAndRejectsJunk() {
+        // 与 validateSyncUrl 不同：样本原域名在这里是**合法**的，用户就是要连真服务。
+        assertNull(validateAhBaseUrl(AH_DEFAULT_BASE))
+        assertNull(validateAhBaseUrl(""))
+        assertNotNull(validateAhBaseUrl("ftp://x.com"))
+        assertNotNull(validateAhBaseUrl("http://localhost"))
     }
 
     // ------------------------------------------------------------- 工具
