@@ -110,6 +110,17 @@ status: W1.1–W1.4 完成；下一切片 W2.1
 - [x] `:shared:jvmTest :app:assembleDebug :app:assembleDebugAndroidTest checkAdDeps` 绿
 - 备注：仪器测试不拉起 Compose 界面——vivo 拦后台 Activity 启动会让 `ActivityScenario` 无限等 RESUMED；改为断言 `AppGraph.database` 已注入，Application 启动链路仍被每个用例覆盖。
 
+## W3.1 模拟器手工路径复核
+
+状态：完成（2026-11-16，`emulator-5554` / AVD `Pixel_9_Pro_API_36`）。
+
+- [x] 调拨：银行卡 5000 / 支付宝 300 之间转 200，两边余额各变 4800 / 500，资产净值仍 5300，账单出现「转 调拨 200.00」，收支不变
+- [x] 小组件：应用内「添加到桌面」→ 系统 `AddItemActivity` 确认 → `dumpsys appwidget` 出现本 App provider → 桌面显示；记一笔 12.34 后桌面立即刷新
+- [x] 周期账提醒：新建「16 号 0 点」提醒（时刻已过）→ 系统闹钟立即触发 → 通知标题/正文正确 → 点通知落到「记一笔」页
+- [x] 周期账自动入账：保存 `Rent 1500` 后本月支出 93.70 → 1606.04，账单列表出现 `-1500.00`，与 `generateDueBills` 的 `source=5` 幂等入账一致
+- 修复：保存/删除周期账后立刻 `rescheduleReminders`（原先只在 App 启动与开机重排）；页面文案从「到期只提醒」改为「到期自动写入账单」
+- 限制：模拟器无法 `adb root` 改系统时间；`exported="false"` 的 `BillAlarmReceiver` 也不接受 shell 广播，验证改走「创建已过时刻的提醒」这条真实路径
+
 ## L1 · QQ 登录（只登录，不注册）
 
 状态：完成。代码、JVM 测试、构建与模拟器验证均已通过。
@@ -154,4 +165,6 @@ status: W1.1–W1.4 完成；下一切片 W2.1
 | W2.3 | `ef01067` | 248 用例 + assembleDebug + checkAdDeps 绿 |
 | W2.4 | `d46de72` | 248 用例 + assembleDebug + checkAdDeps 绿 |
 | W3.0 | `188b002` | jvmTest + assembleDebug + assembleDebugAndroidTest + checkAdDeps 绿；真机 `OK (3 tests)` |
-| L1 | 本次提交 | 266 用例 + assembleDebug + checkAdDeps 绿；模拟器走通登录/刷新/退出与地址切换 |
+| L1 | `918a271` | 266 用例 + assembleDebug + checkAdDeps 绿；模拟器走通登录/刷新/退出与地址切换 |
+| W2.2 追加 | `3b6f90a` | 266 用例 + assembleDebug + checkAdDeps 绿；模拟器挂上桌面并随记账刷新 |
+| W3.1 | `fe4395f` | 266 用例 + assembleDebug + checkAdDeps 绿；模拟器走通调拨/组件/提醒通知 |
