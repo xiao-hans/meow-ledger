@@ -43,6 +43,7 @@ fun WidgetsPage(
     page: String,
     onOpen: (String) -> Unit,
     onBack: () -> Unit,
+    onPin: (kind: String, size: String) -> String = { _, _ -> "" },
 ) {
     when {
         page == "widget-new" -> WidgetEdit(repo, month, null, onBack)
@@ -50,14 +51,21 @@ fun WidgetsPage(
             val row = repo.get(page.removePrefix("widget:"))
             if (row == null) Missing("找不到这个组件", onBack) else WidgetEdit(repo, month, row, onBack)
         }
-        else -> WidgetList(repo, month, onOpen, onBack)
+        else -> WidgetList(repo, month, onOpen, onBack, onPin)
     }
 }
 
 @Composable
-private fun WidgetList(repo: WidgetRepository, month: Long, onOpen: (String) -> Unit, onBack: () -> Unit) {
+private fun WidgetList(
+    repo: WidgetRepository,
+    month: Long,
+    onOpen: (String) -> Unit,
+    onBack: () -> Unit,
+    onPin: (kind: String, size: String) -> String,
+) {
     val palette = LocalPalette.current
     var extraRows by remember { mutableStateOf(repo.extraRows()) }
+    var notice by remember { mutableStateOf("") }
     fun toggleRow(key: String) {
         val next = if (key in extraRows) extraRows - key else extraRows + key
         repo.setExtraRows(next)
@@ -85,6 +93,12 @@ private fun WidgetList(repo: WidgetRepository, month: Long, onOpen: (String) -> 
             }
         }
         ActionButton("添加组件", true) { onOpen("widget-new") }
+        ActionButton("添加到桌面", true) {
+            notice = onPin(WIDGET_KIND_MONTH, WIDGET_SIZE_SMALL)
+        }
+        if (notice.isNotBlank()) {
+            Text(notice, color = palette.textSecondary, fontSize = 12.sp)
+        }
         if (rows.isEmpty()) {
             Empty("还没有组件", "选一个尺寸，看看它在桌面上的样子")
         }

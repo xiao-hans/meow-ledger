@@ -210,6 +210,45 @@ class MainActivity : ComponentActivity() {
                 }
             }.getOrDefault("当前系统不允许截屏，已打开待确认队列，可改用票据识别。")
 
+            /**
+             * 把小组件固定到桌面。`requestPinAppWidget` 会弹系统自己的确认框，
+             * 用户点「添加」才算成功；桌面不支持固定时回一句手动路径。
+             *
+             * 这里不传 successCallback：系统固定成功后自己按 `android:configure`
+             * 拉起 [WidgetConfigActivity] 并带上真实的 appWidgetId。预选的种类和尺寸
+             * 先写进设置，配置页读到就当作默认值，用户仍可改。
+             */
+            override fun pinWidget(kind: String, size: String): String {
+                if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) {
+                    return "当前系统不支持应用内固定组件，请长按桌面 → 小组件 → 喵啊记账。"
+                }
+                val manager = android.appwidget.AppWidgetManager.getInstance(this@MainActivity)
+                if (!manager.isRequestPinAppWidgetSupported) {
+                    return "桌面不支持应用内固定组件，请长按桌面 → 小组件 → 喵啊记账。"
+                }
+                runCatching {
+                    val store = com.meow.ledger.shared.auto.SettingsStore(AppGraph.database)
+                    store.setText(com.meow.ledger.shared.manage.KEY_WIDGET_PIN_KIND, kind)
+                    store.setText(com.meow.ledger.shared.manage.KEY_WIDGET_PIN_SIZE, size)
+                }
+                val provider = android.content.ComponentName(
+                    this@MainActivity,
+                    com.meow.ledger.platform.AppWidgetReceiver::class.java,
+                )
+                val requested = runCatching { manager.requestPinAppWidget(provider, null, null) }
+                    .getOrDefault(false)
+                return if (requested) {
+                    "已在桌面弹出确认框；点「添加」后组件才会出现。"
+                } else {
+                    "没能请求固定组件，请长按桌面 → 小组件 → 喵啊记账。"
+                }
+            }
+
+            /** 写账/删账/调拨后立刻刷新桌面组件，避免桌面数字滞后。 */
+            override fun refreshWidgets() {
+                com.meow.ledger.platform.AppWidgetReceiver.refresh(this@MainActivity)
+            }
+
             /** 平台 BiometricPrompt 只在 API 28+ 可用；26–27 直接回退口令。 */
             override fun biometricAvailable(): Boolean =
                 if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.P) {

@@ -92,6 +92,18 @@ interface EntryHost {
     /** 启动 MediaProjection 截屏采集；拒绝或组件缺失时返回兜底文案。 */
     fun startScreenCapture(): String
 
+    /**
+     * 请求把小组件固定到桌面。系统会弹自己的确认框，用户点「添加」后才真正上桌面；
+     * 桌面不支持时返回引导文案，让用户改用长按桌面手动添加。
+     */
+    fun pinWidget(kind: String, size: String): String
+
+    /**
+     * 账目变动后立刻刷新桌面组件。只在切回前台时刷新会让用户记完账仍看到旧数字，
+     * 所以写账/删账/调拨后都要调一次。平台未实现时无副作用。
+     */
+    fun refreshWidgets()
+
     /** 本机是否具备可用的指纹/面容解锁；false 时 UI 不展示入口，只留口令。 */
     fun biometricAvailable(): Boolean
 

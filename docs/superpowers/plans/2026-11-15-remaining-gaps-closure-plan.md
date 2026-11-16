@@ -68,13 +68,18 @@ status: W1.1–W1.4 完成；下一切片 W2.1
 
 ## W2.2 七小组件种类 + 系统配置入口
 
-状态：完成（`a93fc2f`）。
+状态：完成（`a93fc2f`；2026-11-16 补「添加到桌面」与写账后刷新，模拟器实测挂上桌面）。
 
 - [x] `WIDGET_KINDS` 扩到 7 种：本月收支 / 预算剩余 / 存钱进度 / 总资产 / 今日速记 / 存钱计划 / 待确认票据
 - [x] `WidgetConfigActivity` + `WidgetConfigScreen`：系统添加组件时选种类/尺寸，按 `appWidgetId` 绑定 `Widget_user`
 - [x] `AppWidgetReceiver` 按绑定种类渲染；`onDeleted` 清理绑定与本地行
 - [x] 计数类 `WidgetPreview.firstMoney/secondMoney=false`，不按金额格式化
 - [x] `WidgetConfigTest` 覆盖 7 种、绑定/重配/解绑、计数语义；246 用例 + `assembleDebug` + `checkAdDeps` 绿
+- [x] `EntryHost.pinWidget` + `AppWidgetManager.requestPinAppWidget`：小组件页「添加到桌面」走系统确认框；预选种类/尺寸写 `user_setting:widget_pin_kind|widget_pin_size`，配置页当默认值读
+- [x] `EntryHost.refreshWidgets`：记一笔保存、删账单、调拨写库后立刻刷新桌面，不再只在回前台时刷新
+- [x] 模拟器实测：组件选择器可见「喵啊记账」→ 应用内「添加到桌面」→ 系统弹「Add to home screen」→ 点确认后桌面出现组件（支出 0.00）→ 记一笔 12.34 → 桌面立即变「支出 12.34」
+- [x] 266 用例 + `assembleDebug` + `checkAdDeps` 绿
+- 限制：`adb shell input` 的 `swipe`/`draganddrop`/`motionevent` 都触发不了 Launcher 的拖拽，所以系统组件选择器里的「长按拖到桌面」路径无法自动化；应用内固定按钮是等价且可验证的真实路径。
 
 ## W2.3 登录与推送网关沙箱
 

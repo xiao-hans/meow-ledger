@@ -28,3 +28,6 @@ kmp/app/src/androidTest/
 
 # 本地真机截图与临时产物
 /build/
+
+# 本地调试产物（截图、logcat、临时脚本），不入库
+_work/

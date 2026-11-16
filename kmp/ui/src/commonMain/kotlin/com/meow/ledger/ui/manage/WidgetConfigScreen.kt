@@ -23,6 +23,8 @@ import com.meow.ledger.shared.auto.KEY_THEME
 import com.meow.ledger.shared.auto.SettingsStore
 import com.meow.ledger.shared.auto.THEME_SYSTEM
 import com.meow.ledger.shared.bills.centsToYuan
+import com.meow.ledger.shared.manage.KEY_WIDGET_PIN_KIND
+import com.meow.ledger.shared.manage.KEY_WIDGET_PIN_SIZE
 import com.meow.ledger.shared.manage.WIDGET_KINDS
 import com.meow.ledger.shared.manage.WIDGET_KIND_MONTH
 import com.meow.ledger.shared.manage.WIDGET_SIZES
@@ -45,8 +47,17 @@ fun WidgetConfigScreen(
 ) {
     val repo = remember { WidgetRepository(AppGraph.database) }
     val existing = remember { repo.bindingOf(appWidgetId)?.let { repo.get(it) } }
-    var kind by remember { mutableStateOf(existing?.kind ?: WIDGET_KIND_MONTH) }
-    var size by remember { mutableStateOf(existing?.size ?: WIDGET_SIZE_SMALL) }
+    // 「添加到桌面」预选的种类/尺寸：新组件优先用它，老组件仍按已绑定的来。
+    val pinned = remember {
+        val store = SettingsStore(AppGraph.database)
+        store.text(KEY_WIDGET_PIN_KIND) to store.text(KEY_WIDGET_PIN_SIZE)
+    }
+    var kind by remember {
+        mutableStateOf(existing?.kind ?: pinned.first.ifBlank { WIDGET_KIND_MONTH })
+    }
+    var size by remember {
+        mutableStateOf(existing?.size ?: pinned.second.ifBlank { WIDGET_SIZE_SMALL })
+    }
     MeowTheme(SettingsStore(AppGraph.database).text(KEY_THEME, THEME_SYSTEM)) {
         val palette = LocalPalette.current
         Column(

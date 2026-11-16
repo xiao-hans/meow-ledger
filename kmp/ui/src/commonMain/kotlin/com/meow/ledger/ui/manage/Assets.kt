@@ -326,6 +326,7 @@ private fun TransferPage(
                     installment_interest = 0,
                 )
                 BillsRepository(AppGraph.database, AppGraph.sync).saveWithBalance(bill)
+                AppGraph.permissionHost?.refreshWidgets()
                 onNotice("已调拨 ${money.trim()} 元")
                 onBack()
             },

@@ -58,6 +58,13 @@ const val WIDGET_ROW_BUDGET = "budget"
 const val WIDGET_ROW_PLAN = "plan"
 const val WIDGET_ROW_REFUND = "refund"
 
+/**
+ * 「添加到桌面」预选的种类与尺寸，存 user_setting。
+ * 系统固定组件后会按 `android:configure` 拉起配置页，配置页把它们当默认值。
+ */
+const val KEY_WIDGET_PIN_KIND = "widget_pin_kind"
+const val KEY_WIDGET_PIN_SIZE = "widget_pin_size"
+
 /** 桌面小组件的本地配置。只写本地表，不挂到系统桌面。 */
 class WidgetRepository(private val db: MeowDatabase) {
 

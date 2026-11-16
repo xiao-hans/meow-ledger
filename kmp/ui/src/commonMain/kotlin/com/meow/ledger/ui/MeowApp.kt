@@ -299,6 +299,7 @@ private fun MainApp(
                     onSave = { bill ->
                         repository.saveWithBalance(bill)
                         revision++
+                        AppGraph.permissionHost?.refreshWidgets()
                         if (editing) openBill = bill.client_id
                         composing = false
                         editing = false
@@ -313,7 +314,12 @@ private fun MainApp(
                     message = detailMessage,
                     onBack = { openBill = null; detailMessage = null },
                     onEdit = { editing = true },
-                    onDelete = { repository.deleteWithBalance(0, opened.client_id); openBill = null; revision++ },
+                    onDelete = {
+                        repository.deleteWithBalance(0, opened.client_id)
+                        openBill = null
+                        revision++
+                        AppGraph.permissionHost?.refreshWidgets()
+                    },
                     onEditRefund = { id, cents ->
                         val refund = refunds.ofBill(opened.client_id).firstOrNull { it.id == id }
                         detailMessage = try {
@@ -617,7 +623,14 @@ private fun MinePages(
         page.startsWith("categor") || page.startsWith("tag") -> CatalogPage(CatalogRepository(database), page, onOpen, onBack)
         page.startsWith("fixed") -> FixedBillsPage(FixedBillRepository(database), page, onOpen, onBack)
         page.startsWith("installment") || page.startsWith("save-plan") -> PlansPage(PlanRepository(database), page, onOpen, onBack)
-        page.startsWith("widget") -> WidgetsPage(WidgetRepository(database), month, page, onOpen, onBack)
+        page.startsWith("widget") -> WidgetsPage(
+            WidgetRepository(database),
+            month,
+            page,
+            onOpen,
+            onBack,
+            { kind, size -> AppGraph.permissionHost?.pinWidget(kind, size) ?: "" },
+        )
         page == "help" -> HelpPage(onBack)
         page == "permissions" -> PermissionSettingsPage(onBack)
         else -> AccountPage(
