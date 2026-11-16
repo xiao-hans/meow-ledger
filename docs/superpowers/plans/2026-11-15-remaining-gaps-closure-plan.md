@@ -2,7 +2,7 @@
 title: 剩余缺口收口实施计划
 date: 2026-11-15
 design: docs/superpowers/specs/2026-11-15-remaining-gaps-closure-design.md
-status: W1.1–W1.4 完成；下一切片 W2.1
+status: W1.1–W4 完成；L1（QQ 登录）完成；W3.1 模拟器手工路径已复核
 ---
 
 # 剩余缺口收口实施计划
@@ -128,6 +128,13 @@ status: W1.1–W1.4 完成；下一切片 W2.1
 - [x] OCR 多选与票据图：两张自造票据（星巴克 36.50 / 全家 18.00）多选 → 「已处理 2 张（识别 2 · 无文字 0）」→ 待确认队列两条且「有图 1」
 - 修复：`copyOcrUri` 从 `cacheDir/ocr` 改存 `filesDir/tickets`，并生成 320px 级缩略图写进 `ticket_image.thumb_path`（`134b645`）—— 原来存缓存目录会被系统清掉，`thumb_path` 永远为空
 - 限制：`adb shell input text` 输不进 `#` 和 `&`；深链回调改用 `am start -a android.intent.action.VIEW -d "tencent101983842://auth#access_token=…&openid=…" com.meow.ledger` 投递
+
+### W3.1 追加二（2026-11-16 09:30，同日第三轮）
+
+- [x] MediaProjection 截屏：`meowledger://capture` 深链拉起系统「Share your screen with 喵啊记账?」→ 选应用 → logcat 出现 `Virtual Display: creating DisplayDevice`、`Changing state of virtual display meow-capture from UNKNOWN to ON`、`captureBounds= Rect(0, 0 - 1280, 2856)`，抓完一帧后 `Release VirtualDisplay meow-capture`，单帧取图链路成立
+- [x] 扫码失败回退：`meowledger://scan` → 本机无 zxing 扫码组件 → 横幅「没有可用的扫码组件，已打开「加入账本」，可直接粘贴邀请码。」且页面已跳 `book-join`
+- [x] 邀请码加入：粘贴 `DY1ABC23` → 账本列表出现「共享账本 / 1 位成员 · 每月 1 号起始」
+- 未验：通知监听与无障碍需真实第三方 App 发通知/页面结构，模拟器无法构造；其它品牌 ROM 私有页与厂商推送按设计边界不实现
 
 ## L1 · QQ 登录（只登录，不注册）
 
