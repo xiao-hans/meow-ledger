@@ -142,6 +142,15 @@ status: W1.1–W4 完成；L1（QQ 登录）完成；W3.1 模拟器手工路径�
 - 修复（`e546a14`）：解析前先剔掉 URL、域名与 `host:port` 词，多行文本按行解析拿不到商户时回退整段「金额之后第一个名字」。原来地址栏 `127.0.0.1:8765` 的 `127` 会被读成 `127.00` 元入队，域名 `pay.html` 被当商户名
 - 限制：`file:///sdcard/...` 被 Chrome 拒（`net::ERR_ACCESS_DENIED`），必须走 `adb reverse` + 本地 HTTP 服务；HTML 必须带 `<meta charset="utf-8">`，否则中文全乱码
 
+### W3.1 追加四（2026-11-16 10:20，同日第五轮：通知监听与无障碍）
+
+- [x] 通知监听：手工构造包名 `com.tencent.mm` 的测试 APK（`_work/fakewx`，不入库），启动即发「微信支付 / 支付成功 ¥66.60 商户：肯德基」通知 → `auto_event` 落 `notification / com.tencent.mm / 肯德基 / 6660`
+- [x] 无障碍：同一测试 APK 的窗口显示「微信支付 支付成功 ¥77.80 商户：麦当劳」→ `auto_event` 落 `accessibility / com.tencent.mm / 麦当劳 / 7780`
+- 修复（`2c91d29`）：`AccessibilityCaptureService` 只读 `event.text`，而 `TYPE_WINDOW_STATE_CHANGED` 的 `event.text` 通常为空，等于永远采不到文本；节流窗口又在判空之前更新，一串空事件会把 800ms 窗口占满，后续内容变化事件全被丢掉。现改为文本为空时顺 `rootInActiveWindow` 取可见文案（深度上限 12、总长上限 500），且只在拿到有效文本后才更新节流
+- 测试：`AutoCaptureTest` 加 `accessibilityWindowTextKeepsMerchantAfterMoney`、`notificationTitleAndBodySplitAcrossLines`；`:shared:jvmTest` 270 用例 0 失败
+- 造测试 APK 的坑：`activity` 必须带 MAIN/LAUNCHER `intent-filter` 才会进 Activity Resolver（否则 `am start` 报 `Error type 3`）；`targetSdk` 低于 28 时系统会弹「built for an older version of Android」对话框挡住窗口文案；`d8` 需 `JAVA_HOME` 指向 jbr 且 `DEFAULT_JVM_OPTS=-Xmx256m`，否则 JNI error 或 `os::commit_memory ... errno=1455`；`apksigner` 的 keystore 要先从 `D:/Android Studio/HANXIAO/.android/debug.keystore` 复制到无空格路径
+- 模拟器：原 `emulator-5554` 崩溃后反复起不来（`vkGetDeviceQueue: Invalid device`），解药是加 `-feature -Vulkan`；启动后需 `input text <PIN>` 解锁（`dumpsys user` 要 `RUNNING_UNLOCKED`），且无障碍服务在解锁后要重新 `settings put secure enabled_accessibility_services`
+
 ## L1 · QQ 登录（只登录，不注册）
 
 状态：完成。代码、JVM 测试、构建与模拟器验证均已通过。
@@ -190,3 +199,5 @@ status: W1.1–W4 完成；L1（QQ 登录）完成；W3.1 模拟器手工路径�
 | W2.2 追加 | `3b6f90a` | 266 用例 + assembleDebug + checkAdDeps 绿；模拟器挂上桌面并随记账刷新 |
 | W3.1 | `fe4395f` | 266 用例 + assembleDebug + checkAdDeps 绿；模拟器走通调拨/组件/提醒通知 |
 | W3.1 追加 | `134b645` | 266 用例 + assembleDebug + checkAdDeps 绿；模拟器走通指纹解锁/口令回退/权限拒绝记账/OCR 多选 |
+| W3.1 追加三 | `e546a14` | 268 用例 + assembleDebug + checkAdDeps 绿；模拟器走通截屏 OCR 入队（URL 误判修复） |
+| W3.1 追加四 | `2c91d29` | 270 用例 + assembleDebug + checkAdDeps 绿；模拟器走通通知监听与无障碍两路采集 |
