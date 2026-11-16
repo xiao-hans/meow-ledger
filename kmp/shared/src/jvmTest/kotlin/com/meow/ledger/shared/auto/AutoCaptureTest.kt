@@ -96,6 +96,29 @@ class AutoCaptureTest {
         assertEquals(0, r.created)
         assertTrue(repo.pending().isEmpty())
     }
+
+    /** 无障碍取到的是「应用名 + 整窗文案」拼在一起的一行，商户在金额后面。 */
+    @Test
+    fun accessibilityWindowTextKeepsMerchantAfterMoney() {
+        val text = "FakeWX 微信支付 支付成功 ¥77.80 商户：麦当劳"
+        val r = repo.capture(text, "accessibility", sourceApp = "com.tencent.mm")
+        assertEquals(1, r.created)
+        val event = repo.pending().single()
+        assertEquals(7780L, event.money)
+        assertEquals("麦当劳", event.merchant)
+        assertEquals("com.tencent.mm", event.source_app)
+    }
+
+    /** 通知标题与正文分两段送进来，商户在第二段。 */
+    @Test
+    fun notificationTitleAndBodySplitAcrossLines() {
+        val text = "微信支付\n支付成功 ¥66.60 商户：肯德基"
+        val r = repo.capture(text, "notification", sourceApp = "com.tencent.mm")
+        assertEquals(1, r.created)
+        val event = repo.pending().single()
+        assertEquals(6660L, event.money)
+        assertEquals("肯德基", event.merchant)
+    }
 }
 
 /** 票据整图：ML Kit 多行文本一次解析，日期数字不误判成金额，商户取全段。 */
