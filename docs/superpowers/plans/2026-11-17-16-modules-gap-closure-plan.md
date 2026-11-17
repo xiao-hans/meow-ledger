@@ -82,6 +82,19 @@ status: 实施中
 ## 当前进度
 
 - [x] 设计通过并推送（`defe8c2`）
-- [ ] 增量 1 文档订正
-- [ ] 增量 2 本地回环契约测试
-- [ ] 增量 3 门禁与提交
+- [x] 增量 1 文档订正（提交 `3d145c3`）
+- [x] 增量 2 本地回环契约测试（提交号见下方提交记录）
+- [x] 增量 3 门禁与提交
+
+## 验证记录（2026-11-17）
+
+- `:shared:jvmTest`：49 套件 / 273 用例 / 0 失败 / 0 错误。新增 `LocalBackendContractTest` 3 个用例覆盖 6 个核心端点的明文 JSON、整数分金额、`client_id` 幂等键、统一信封、业务错误码 `42` 与 `trace_id`、断网退避重试、`remoteEnabled=false` 零外发。
+- `:app:assembleDebug`：`BUILD SUCCESSFUL`。
+- `checkAdDeps`：通过，无广告 SDK 命中。
+- Gradle 命令：`JAVA_HOME='D:\\Android Studio\\android studio\\jbr' ...gradle :shared:jvmTest :app:assembleDebug checkAdDeps --offline --console=plain`（Gradle 8.11.1）。
+
+## 剩余边界
+
+- 真实运营商一键登录、个推与 4 厂商推送、真实支付商户资质：按设计不实现。
+- 真实自建后端联调：本地回环契约测试只验证 JVM 侧契约，不代替真实服务端联调。
+- UI 全量仪器测试：现有 3 个用例通过，不覆盖 Compose 全量界面。
